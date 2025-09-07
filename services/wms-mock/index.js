@@ -67,11 +67,22 @@ app.post("/register", async (req, res) => {
   const startTime = Date.now();
   const { orderId, packages, deliveryAddresses, clientId } = req.body;
 
+  console.log("=== WMS DEBUG INFO ===");
+  console.log("Full request body:", JSON.stringify(req.body, null, 2));
+  console.log("Extracted packages:", packages);
+  console.log("Packages type:", typeof packages);
+  console.log("Packages length:", packages?.length);
+  console.log("========================");
+
   logger.info(`WMS Proprietary System - Processing package registration`, {
     orderId,
     clientId,
     packageCount: packages?.length || 0,
     deliveryCount: deliveryAddresses?.length || 0,
+    incomingProtocol: req.get("X-Protocol-Adapter") || "NATIVE",
+    tcpSequenceId: req.get("X-TCP-Sequence-Id") || "NONE",
+    messageType: req.get("X-Message-Type") || "DIRECT_CALL",
+    protocolVersion: req.get("X-Protocol-Version") || "UNKNOWN",
   });
 
   // Simulate proprietary TCP/IP messaging delay

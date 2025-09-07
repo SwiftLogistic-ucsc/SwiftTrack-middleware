@@ -1,9 +1,9 @@
 import express from "express";
 import dotenv from "dotenv";
 import { startProducer, ensureTopic, emitEvent } from "./kafka.js";
-import { verifyContract } from "./services/cmsClient.js";
-import { registerPackage } from "./services/wmsClient.js";
-import { optimizeRoute } from "./services/rosClient.js";
+import { CMSAdapter } from "./adapters/cmsAdapter.js";
+import { WMSAdapter } from "./adapters/wmsAdapter.js";
+import { ROSAdapter } from "./adapters/rosAdapter.js";
 import { getLogger } from "@swifttrack/logger";
 
 dotenv.config();
@@ -45,6 +45,18 @@ const TOPIC = process.env.ORDER_EVENTS_TOPIC;
 const CMS_URL = process.env.CMS_URL;
 const WMS_URL = process.env.WMS_URL;
 const ROS_URL = process.env.ROS_URL;
+
+// Initialize protocol adapters for heterogeneous systems integration
+const cmsAdapter = new CMSAdapter(CMS_URL);
+const wmsAdapter = new WMSAdapter(WMS_URL);
+const rosAdapter = new ROSAdapter(ROS_URL);
+
+logger.info("SwiftTrack Middleware - Protocol adapters initialized", {
+  cmsAdapter: "SOAP/XML Legacy System",
+  wmsAdapter: "TCP/IP Proprietary System",
+  rosAdapter: "REST/JSON Cloud API",
+  integrationChallenge: "Heterogeneous Systems Bridge",
+});
 
 function now() {
   return new Date().toISOString();
@@ -121,8 +133,17 @@ app.post("/api/orders", async (req, res) => {
     logger.info(
       `Step 1: Starting CMS contract verification for client ${order.clientId}, order ${order.id}`
     );
+    logger.info(
+      "Heterogeneous Integration - Using SOAP/XML adapter for legacy CMS",
+      {
+        systemType: "LEGACY_ON_PREMISE",
+        protocol: "SOAP/XML",
+        challenge: "Protocol translation from REST/JSON to SOAP/XML",
+      }
+    );
+
     const cmsStartTime = Date.now();
-    const cms = await verifyContract(order, CMS_URL);
+    const cms = await cmsAdapter.verifyContract(order);
     const cmsDuration = Date.now() - cmsStartTime;
 
     if (!cms.ok) {
@@ -159,8 +180,18 @@ app.post("/api/orders", async (req, res) => {
     logger.info(
       `Step 2: Starting WMS package registration for order ${order.id}`
     );
+    logger.info(
+      "Heterogeneous Integration - Using TCP/IP adapter for proprietary WMS",
+      {
+        systemType: "PROPRIETARY_ON_PREMISE",
+        protocol: "TCP/IP Binary Messaging",
+        challenge:
+          "Protocol translation from REST/JSON to TCP/IP binary format",
+      }
+    );
+
     const wmsStartTime = Date.now();
-    const wms = await registerPackage(order, WMS_URL);
+    const wms = await wmsAdapter.registerPackage(order);
     const wmsDuration = Date.now() - wmsStartTime;
 
     if (!wms.ok) {
@@ -197,8 +228,17 @@ app.post("/api/orders", async (req, res) => {
     logger.info(
       `Step 3: Starting ROS route optimization for order ${order.id}`
     );
+    logger.info(
+      "Heterogeneous Integration - Using REST/JSON adapter for cloud ROS",
+      {
+        systemType: "CLOUD_BASED_SAAS",
+        protocol: "REST/JSON over HTTPS",
+        challenge: "Cloud API integration with retry logic and error handling",
+      }
+    );
+
     const rosStartTime = Date.now();
-    const ros = await optimizeRoute(order, ROS_URL);
+    const ros = await rosAdapter.optimizeRoute(order);
     const rosDuration = Date.now() - rosStartTime;
 
     if (!ros.ok) {
@@ -268,6 +308,12 @@ app.post("/api/orders", async (req, res) => {
         ],
         assignedDriver: ros.assignedDriver,
         estimatedDelivery: ros.estimatedDelivery,
+        protocolIntegration: {
+          cmsProtocol: "SOAP/XML",
+          wmsProtocol: "TCP/IP Binary",
+          rosProtocol: "REST/JSON HTTPS",
+          totalAdapterOverhead: `${cmsDuration + wmsDuration + rosDuration}ms`,
+        },
       }
     );
 

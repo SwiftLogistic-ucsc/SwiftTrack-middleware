@@ -2,10 +2,12 @@
   "name": "ros-mock",
   "type": "module",
   "dependencies": {
+    "@swifttrack/logger": "../../packages/logger",
     "express": "^4.19.2",
-    "@swifttrack/logger": "../../packages/logger"
+    "nodemon": "^3.1.10"
   },
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "dev": "nodemon index.js"
   }
 }

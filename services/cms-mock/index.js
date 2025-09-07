@@ -61,12 +61,26 @@ app.post("/verify", async (req, res) => {
   const startTime = Date.now();
   const { orderId, clientId, packages, deliveryAddresses, priority } = req.body;
 
+  console.log("=== CMS DEBUG INFO ===");
+  console.log("Full request body:", JSON.stringify(req.body, null, 2));
+  console.log("Extracted clientId:", clientId);
+  console.log("ClientId type:", typeof clientId);
+  console.log("ClientId length:", clientId?.length);
+  console.log("Available clients:", Object.keys(clients));
+  console.log("Client exists check:", !!clients[clientId]);
+  console.log("Direct lookup result:", clients[clientId]);
+  console.log("========================");
+
   logger.info(`CMS Legacy System - Processing contract verification`, {
     orderId,
     clientId,
     packageCount: packages?.length || 0,
     deliveryCount: deliveryAddresses?.length || 0,
     priority: priority || "STANDARD",
+    incomingProtocol: req.get("X-Protocol-Adapter") || "NATIVE",
+    soapAction: req.get("SOAPAction") || "DIRECT_CALL",
+    availableClients: Object.keys(clients),
+    clientExists: !!clients[clientId],
   });
 
   // Simulate legacy system processing delay (SOAP/XML overhead)

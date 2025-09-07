@@ -115,12 +115,23 @@ app.post("/optimize-route", async (req, res) => {
   const startTime = Date.now();
   const { orderId, deliveryAddresses, packages, priority, clientId } = req.body;
 
+  console.log("=== ROS DEBUG INFO ===");
+  console.log("Full request body:", JSON.stringify(req.body, null, 2));
+  console.log("Extracted deliveryAddresses:", deliveryAddresses);
+  console.log("DeliveryAddresses type:", typeof deliveryAddresses);
+  console.log("DeliveryAddresses length:", deliveryAddresses?.length);
+  console.log("========================");
+
   logger.info(`ROS Cloud API - Processing route optimization request`, {
     orderId,
     clientId,
     deliveryCount: deliveryAddresses?.length || 0,
     packageCount: packages?.length || 0,
     priority: priority || "STANDARD",
+    apiVersion: req.get("X-API-Version") || "UNKNOWN",
+    requestId: req.get("X-Request-ID") || "NONE",
+    clientSystem: req.get("X-Client-System") || "UNKNOWN",
+    cloudProtocol: "REST/JSON over HTTPS",
   });
 
   // Simulate cloud API processing delay

@@ -1,9 +1,9 @@
 {
-  "name": "@SwiftTrack/logger",
+  "name": "@swifttrack/logger",
   "version": "0.0.1",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "description": "logger private package for SwiftTrack",
+  "description": "logger private package for swifttrack",
   "private": true,
   "scripts": {
     "build": "tsc",
@@ -13,7 +13,7 @@
     "winston": "^3.17.0"
   },
   "license": "MIT",
-  "author": "SwiftTrack",
+  "author": "swifttrack",
   "devDependencies": {
     "@types/node": "^22.13.13",
     "typescript": "^5.8.2"

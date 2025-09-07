@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>swifttrack Prototype</title>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  </head>
+  <body>
+    <h2>swifttrack — Live Order Updates</h2>
+    <form id="orderForm">
+      <label>Order ID: <input id="orderId" required /></label>
+      <label
+        >Client ID: <input id="clientId" value="client-123" required
+      /></label>
+      <button type="submit">Submit Order</button>
+    </form>
+
+    <ul id="feed"></ul>
+
+    <script>
+      // Receive live updates
+      const socket = io("http://localhost:3002");
+      socket.on("orderUpdate", (evt) => {
+        const li = document.createElement("li");
+        li.textContent = `[${evt.timestamp}] ${evt.eventType} — order ${evt.orderId}`;
+        document.getElementById("feed").prepend(li);
+      });
+
+      // Submit order to Order Service
+      document
+        .getElementById("orderForm")
+        .addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const id =
+            document.getElementById("orderId").value || Date.now().toString();
+          const clientId = document.getElementById("clientId").value;
+
+          await fetch("http://localhost:4000/api/orders", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              id,
+              clientId,
+              items: [{ sku: "SKU-001", qty: 1 }],
+              addresses: ["No. 1, Flower Rd, Colombo 7"],
+            }),
+          });
+        });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,15 @@
+{
+  "name": "notification-service",
+  "type": "module",
+  "dependencies": {
+    "@swifttrack/logger": "../../packages/logger",
+    "dotenv": "^16.4.5",
+    "kafkajs": "^2.2.4",
+    "nodemon": "^3.1.10",
+    "socket.io": "^4.7.5"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  }
+}

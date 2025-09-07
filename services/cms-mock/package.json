@@ -1,0 +1,11 @@
+{
+  "name": "cms-mock",
+  "type": "module",
+  "dependencies": {
+    "@swifttrack/logger": "../../packages/logger",
+    "express": "^4.19.2"
+  },
+  "scripts": {
+    "start": "node index.js"
+  }
+}

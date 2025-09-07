@@ -1,0 +1,11 @@
+{
+  "name": "ros-mock",
+  "type": "module",
+  "dependencies": {
+    "express": "^4.19.2",
+    "@swifttrack/logger": "../../packages/logger"
+  },
+  "scripts": {
+    "start": "node index.js"
+  }
+}

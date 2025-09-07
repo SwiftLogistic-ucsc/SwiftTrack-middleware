@@ -1,7 +1,7 @@
 import Redis from "ioredis";
-import { getLogger } from "@SwiftTrack/logger";
+import { getLogger } from "@swifttrack/logger";
 
-const logger = getLogger("@SwiftTrack/redis-client", "info");
+const logger = getLogger("@swifttrack/redis-client", "info");
 
 class RedisClient {
   private instance: Redis;

@@ -1,7 +1,7 @@
 import { Kafka, Producer, Partitioners } from "kafkajs";
-import { getLogger } from "@SwiftTrack/logger";
+import { getLogger } from "@swifttrack/logger";
 
-const logger = getLogger("@SwiftTrack/kafka-client", "info");
+const logger = getLogger("@swifttrack/kafka-client", "info");
 
 class KafkaClient {
   private producer: Producer;

@@ -1,19 +1,19 @@
 {
-  "name": "@SwiftTrack/kafka-client",
+  "name": "@swifttrack/kafka-client",
   "version": "0.0.1",
   "main": "dist/index.js",
-  "description": "kafka-client private package for SwiftTrack",
+  "description": "kafka-client private package for swifttrack",
   "private": true,
   "scripts": {
     "build": "tsc",
     "build:pack": "tsc && npm pack"
   },
   "dependencies": {
-    "@SwiftTrack/logger": "../logger",
+    "@swifttrack/logger": "../logger",
     "kafkajs": "^2.2.4"
   },
   "license": "MIT",
-  "author": "SwiftTrack",
+  "author": "swifttrack",
   "devDependencies": {
     "@types/node": "^22.13.13",
     "typescript": "^5.8.2"

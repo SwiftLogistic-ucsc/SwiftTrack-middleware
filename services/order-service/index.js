@@ -54,12 +54,15 @@ app.post("/api/orders", async (req, res) => {
   const order = req.body;
   const startTime = Date.now();
 
-  logger.info(`Processing new order request`, {
+  logger.info(`Processing new e-commerce order submission`, {
     orderId: order?.id,
     clientId: order?.clientId,
-    itemCount: order?.items?.length || 0,
+    itemCount: order?.packages?.length || 0,
+    deliveryAddresses: order?.deliveryAddresses?.length || 0,
+    priority: order?.priority || "STANDARD",
   });
 
+  // Validate required fields for Swift Logistics order processing
   if (!order?.id) {
     logger.warn(`Order submission failed: missing order ID`, {
       body: req.body,
@@ -67,33 +70,76 @@ app.post("/api/orders", async (req, res) => {
     return res.status(400).json({ error: "order.id is required" });
   }
 
-  try {
-    logger.info(`Starting order processing workflow for order ${order.id}`);
+  if (!order?.clientId) {
+    logger.warn(`Order submission failed: missing client ID`, {
+      orderId: order.id,
+    });
+    return res
+      .status(400)
+      .json({ error: "clientId is required for Swift Logistics processing" });
+  }
 
+  if (!order?.packages || order.packages.length === 0) {
+    logger.warn(`Order submission failed: no packages`, { orderId: order.id });
+    return res.status(400).json({ error: "At least one package is required" });
+  }
+
+  if (!order?.deliveryAddresses || order.deliveryAddresses.length === 0) {
+    logger.warn(`Order submission failed: no delivery addresses`, {
+      orderId: order.id,
+    });
+    return res
+      .status(400)
+      .json({ error: "At least one delivery address is required" });
+  }
+
+  try {
+    logger.info(
+      `Starting Swift Logistics order processing workflow for order ${order.id}`,
+      {
+        clientId: order.clientId,
+        packageCount: order.packages.length,
+        deliveryCount: order.deliveryAddresses.length,
+        priority: order.priority,
+      }
+    );
+
+    // Emit initial order submission event for real-time tracking
     await emitEvent(TOPIC, {
       eventType: "ORDER_SUBMITTED",
       orderId: order.id,
       timestamp: now(),
-      data: { order },
+      data: {
+        order,
+        status: "PROCESSING",
+        stage: "INITIAL_SUBMISSION",
+      },
     });
     logger.debug(`Emitted ORDER_SUBMITTED event for order ${order.id}`);
 
-    // Step 1: CMS verify
-    logger.info(`Step 1: Starting CMS verification for order ${order.id}`);
+    // Step 1: CMS Contract Verification (Legacy SOAP/XML system simulation)
+    logger.info(
+      `Step 1: Starting CMS contract verification for client ${order.clientId}, order ${order.id}`
+    );
     const cmsStartTime = Date.now();
     const cms = await verifyContract(order, CMS_URL);
     const cmsDuration = Date.now() - cmsStartTime;
 
     if (!cms.ok) {
-      logger.error(`CMS verification failed for order ${order.id}`, {
+      logger.error(`CMS contract verification failed for order ${order.id}`, {
         response: cms,
         duration: cmsDuration,
+        clientId: order.clientId,
       });
-      throw new Error("CMS verification failed");
+      throw new Error(
+        `CMS verification failed: ${cms.error || "Contract validation error"}`
+      );
     }
 
-    logger.info(`CMS verification successful for order ${order.id}`, {
+    logger.info(`CMS contract verification successful for order ${order.id}`, {
       contractId: cms.contractId,
+      billingStatus: cms.billingStatus,
+      creditLimit: cms.creditLimit,
       duration: cmsDuration,
     });
 
@@ -101,26 +147,37 @@ app.post("/api/orders", async (req, res) => {
       eventType: "CMS_VERIFIED",
       orderId: order.id,
       timestamp: now(),
-      data: cms,
+      data: {
+        ...cms,
+        status: "CONTRACT_VERIFIED",
+        stage: "CMS_PROCESSING",
+      },
     });
     logger.debug(`Emitted CMS_VERIFIED event for order ${order.id}`);
 
-    // Step 2: WMS register
-    logger.info(`Step 2: Starting WMS registration for order ${order.id}`);
+    // Step 2: WMS Package Registration (Proprietary TCP/IP messaging simulation)
+    logger.info(
+      `Step 2: Starting WMS package registration for order ${order.id}`
+    );
     const wmsStartTime = Date.now();
     const wms = await registerPackage(order, WMS_URL);
     const wmsDuration = Date.now() - wmsStartTime;
 
     if (!wms.ok) {
-      logger.error(`WMS registration failed for order ${order.id}`, {
+      logger.error(`WMS package registration failed for order ${order.id}`, {
         response: wms,
         duration: wmsDuration,
+        packages: order.packages.length,
       });
-      throw new Error("WMS registration failed");
+      throw new Error(
+        `WMS registration failed: ${wms.error || "Package registration error"}`
+      );
     }
 
-    logger.info(`WMS registration successful for order ${order.id}`, {
+    logger.info(`WMS package registration successful for order ${order.id}`, {
       packageId: wms.packageId,
+      warehouseLocation: wms.warehouseLocation,
+      estimatedReadyTime: wms.estimatedReadyTime,
       duration: wmsDuration,
     });
 
@@ -128,11 +185,15 @@ app.post("/api/orders", async (req, res) => {
       eventType: "WMS_REGISTERED",
       orderId: order.id,
       timestamp: now(),
-      data: wms,
+      data: {
+        ...wms,
+        status: "PACKAGES_REGISTERED",
+        stage: "WMS_PROCESSING",
+      },
     });
     logger.debug(`Emitted WMS_REGISTERED event for order ${order.id}`);
 
-    // Step 3: ROS optimize route
+    // Step 3: ROS Route Optimization (Modern RESTful API simulation)
     logger.info(
       `Step 3: Starting ROS route optimization for order ${order.id}`
     );
@@ -141,16 +202,22 @@ app.post("/api/orders", async (req, res) => {
     const rosDuration = Date.now() - rosStartTime;
 
     if (!ros.ok) {
-      logger.error(`ROS optimization failed for order ${order.id}`, {
+      logger.error(`ROS route optimization failed for order ${order.id}`, {
         response: ros,
         duration: rosDuration,
+        deliveryAddresses: order.deliveryAddresses.length,
       });
-      throw new Error("ROS optimization failed");
+      throw new Error(
+        `ROS optimization failed: ${ros.error || "Route optimization error"}`
+      );
     }
 
-    logger.info(`ROS optimization successful for order ${order.id}`, {
+    logger.info(`ROS route optimization successful for order ${order.id}`, {
       routeId: ros.routeId,
       etaMinutes: ros.etaMinutes,
+      driverId: ros.assignedDriver,
+      vehicleId: ros.assignedVehicle,
+      optimizedStops: ros.optimizedStops,
       duration: rosDuration,
     });
 
@@ -158,46 +225,97 @@ app.post("/api/orders", async (req, res) => {
       eventType: "ROS_OPTIMIZED",
       orderId: order.id,
       timestamp: now(),
-      data: ros,
+      data: {
+        ...ros,
+        status: "ROUTE_OPTIMIZED",
+        stage: "ROS_PROCESSING",
+      },
     });
     logger.debug(`Emitted ROS_OPTIMIZED event for order ${order.id}`);
 
+    // Final completion event
     await emitEvent(TOPIC, {
-      eventType: "ORDER_COMPLETED",
+      eventType: "ORDER_READY_FOR_DELIVERY",
       orderId: order.id,
       timestamp: now(),
-      data: { ok: true },
+      data: {
+        ok: true,
+        status: "READY_FOR_DELIVERY",
+        stage: "PROCESSING_COMPLETE",
+        manifest: {
+          contractId: cms.contractId,
+          packageId: wms.packageId,
+          routeId: ros.routeId,
+          assignedDriver: ros.assignedDriver,
+          estimatedDelivery: ros.estimatedDelivery,
+        },
+      },
     });
 
     const totalDuration = Date.now() - startTime;
     logger.info(
-      `Order processing completed successfully for order ${order.id}`,
+      `Swift Logistics order processing completed successfully for order ${order.id}`,
       {
         totalDuration,
         cmsDuration,
         wmsDuration,
         rosDuration,
-        steps: ["CMS_VERIFIED", "WMS_REGISTERED", "ROS_OPTIMIZED"],
+        stages: [
+          "CMS_VERIFIED",
+          "WMS_REGISTERED",
+          "ROS_OPTIMIZED",
+          "READY_FOR_DELIVERY",
+        ],
+        assignedDriver: ros.assignedDriver,
+        estimatedDelivery: ros.estimatedDelivery,
       }
     );
 
-    res.json({ status: "ok", orderId: order.id });
+    res.json({
+      status: "success",
+      orderId: order.id,
+      message: "Order processed successfully and ready for delivery",
+      manifest: {
+        contractId: cms.contractId,
+        packageId: wms.packageId,
+        routeId: ros.routeId,
+        assignedDriver: ros.assignedDriver,
+        estimatedDelivery: ros.estimatedDelivery,
+      },
+    });
   } catch (err) {
     const totalDuration = Date.now() - startTime;
-    logger.error(`Order processing failed for order ${order.id}`, {
-      error: err.message,
-      duration: totalDuration,
-      stack: err.stack,
-    });
+    logger.error(
+      `Swift Logistics order processing failed for order ${order.id}`,
+      {
+        error: err.message,
+        duration: totalDuration,
+        stack: err.stack,
+        clientId: order.clientId,
+        failureStage: err.stage || "UNKNOWN",
+      }
+    );
 
+    // Emit failure event for real-time tracking
     await emitEvent(TOPIC, {
       eventType: "ORDER_FAILED",
       orderId: order.id,
       timestamp: now(),
-      data: { error: err.message },
+      data: {
+        error: err.message,
+        status: "FAILED",
+        stage: "ERROR_HANDLING",
+        requiresManualIntervention: true,
+      },
     });
 
-    res.status(500).json({ error: err.message });
+    res.status(500).json({
+      error: err.message,
+      orderId: order.id,
+      status: "failed",
+      message:
+        "Order processing failed. Please contact Swift Logistics support.",
+    });
   }
 });
 

@@ -2,49 +2,312 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <title>swifttrack Prototype</title>
+    <title>SwiftTrack - Swift Logistics Order Portal</title>
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 20px;
+        background: #f5f5f5;
+      }
+      .container {
+        max-width: 800px;
+        margin: 0 auto;
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      }
+      h2 {
+        color: #2c3e50;
+        border-bottom: 3px solid #3498db;
+        padding-bottom: 10px;
+      }
+      .form-section {
+        margin-bottom: 20px;
+        padding: 15px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+      }
+      .form-section h3 {
+        margin-top: 0;
+        color: #34495e;
+      }
+      label {
+        display: block;
+        margin: 10px 0 5px;
+        font-weight: bold;
+      }
+      input,
+      select,
+      textarea {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        box-sizing: border-box;
+      }
+      button {
+        background: #3498db;
+        color: white;
+        padding: 12px 20px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 16px;
+      }
+      button:hover {
+        background: #2980b9;
+      }
+      .feed {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 5px;
+        max-height: 400px;
+        overflow-y: auto;
+        padding: 10px;
+      }
+      .feed li {
+        margin: 5px 0;
+        padding: 8px;
+        border-left: 4px solid #3498db;
+        background: white;
+        border-radius: 3px;
+      }
+      .feed li.error {
+        border-left-color: #e74c3c;
+        background: #fdf2f2;
+      }
+      .feed li.success {
+        border-left-color: #27ae60;
+        background: #f2f8f2;
+      }
+      .add-button {
+        background: #27ae60;
+        margin: 5px 0;
+        padding: 5px 10px;
+        font-size: 12px;
+      }
+      .remove-button {
+        background: #e74c3c;
+        margin-left: 10px;
+        padding: 2px 8px;
+        font-size: 12px;
+      }
+      .package-item,
+      .address-item {
+        border: 1px solid #eee;
+        padding: 10px;
+        margin: 5px 0;
+        border-radius: 3px;
+        background: #fafafa;
+      }
+    </style>
   </head>
   <body>
-    <h2>swifttrack — Live Order Updates</h2>
-    <form id="orderForm">
-      <label>Order ID: <input id="orderId" required /></label>
-      <label
-        >Client ID: <input id="clientId" value="client-123" required
-      /></label>
-      <button type="submit">Submit Order</button>
-    </form>
+    <div class="container">
+      <h2>SwiftTrack — Swift Logistics E-Commerce Portal</h2>
 
-    <ul id="feed"></ul>
+      <form id="orderForm">
+        <div class="form-section">
+          <h3>Order Information</h3>
+          <label
+            >Order ID:
+            <input id="orderId" required placeholder="e.g., ORD-2025-001"
+          /></label>
+          <label
+            >Client ID:
+            <input
+              id="clientId"
+              value="client-123"
+              required
+              placeholder="e.g., CLIENT-001"
+          /></label>
+          <label
+            >Priority:
+            <select id="priority">
+              <option value="STANDARD">Standard</option>
+              <option value="URGENT">Urgent</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="form-section">
+          <h3>Packages</h3>
+          <div id="packages">
+            <div class="package-item">
+              <label
+                >SKU:
+                <input name="packageSku" required placeholder="e.g., BOOK-001"
+              /></label>
+              <label
+                >Description:
+                <input name="packageDesc" placeholder="e.g., Programming Book"
+              /></label>
+              <label
+                >Quantity:
+                <input name="packageQty" type="number" value="1" min="1"
+              /></label>
+              <label
+                >Priority:
+                <select name="packagePriority">
+                  <option value="STANDARD">Standard</option>
+                  <option value="URGENT">Urgent</option>
+                </select>
+              </label>
+            </div>
+          </div>
+          <button type="button" class="add-button" onclick="addPackage()">
+            + Add Package
+          </button>
+        </div>
+
+        <div class="form-section">
+          <h3>Delivery Addresses</h3>
+          <div id="addresses">
+            <div class="address-item">
+              <textarea
+                name="deliveryAddress"
+                required
+                placeholder="e.g., No 123, Main Street, Colombo 07"
+              ></textarea>
+            </div>
+          </div>
+          <button type="button" class="add-button" onclick="addAddress()">
+            + Add Address
+          </button>
+        </div>
+
+        <button type="submit">Submit Order to Swift Logistics</button>
+      </form>
+
+      <h3>Live Order Tracking</h3>
+      <ul id="feed" class="feed"></ul>
+    </div>
 
     <script>
-      // Receive live updates
+      // Real-time updates via WebSocket
       const socket = io("http://localhost:3002");
       socket.on("orderUpdate", (evt) => {
         const li = document.createElement("li");
-        li.textContent = `[${evt.timestamp}] ${evt.eventType} — order ${evt.orderId}`;
+        const eventClass = evt.eventType.includes("FAILED")
+          ? "error"
+          : "success";
+        li.className = eventClass;
+
+        let message = `[${evt.timestamp}] ${evt.eventType} — Order ${evt.orderId}`;
+
+        // Add additional details based on event type
+        if (evt.data && evt.data.assignedDriver) {
+          message += ` (Driver: ${evt.data.assignedDriver})`;
+        }
+        if (evt.data && evt.data.etaMinutes) {
+          message += ` (ETA: ${evt.data.etaMinutes} minutes)`;
+        }
+        if (evt.data && evt.data.contractId) {
+          message += ` (Contract: ${evt.data.contractId})`;
+        }
+        if (evt.data && evt.data.error) {
+          message += ` (Error: ${evt.data.error})`;
+        }
+
+        li.textContent = message;
         document.getElementById("feed").prepend(li);
       });
 
-      // Submit order to Order Service
+      // Add package function
+      function addPackage() {
+        const packagesDiv = document.getElementById("packages");
+        const packageItem = document.createElement("div");
+        packageItem.className = "package-item";
+        packageItem.innerHTML = `
+          <label>SKU: <input name="packageSku" required placeholder="e.g., ELECTRONICS-001" /></label>
+          <label>Description: <input name="packageDesc" placeholder="e.g., Smartphone" /></label>
+          <label>Quantity: <input name="packageQty" type="number" value="1" min="1" /></label>
+          <label>Priority: 
+            <select name="packagePriority">
+              <option value="STANDARD">Standard</option>
+              <option value="URGENT">Urgent</option>
+            </select>
+          </label>
+          <button type="button" class="remove-button" onclick="this.parentElement.remove()">Remove</button>
+        `;
+        packagesDiv.appendChild(packageItem);
+      }
+
+      // Add address function
+      function addAddress() {
+        const addressesDiv = document.getElementById("addresses");
+        const addressItem = document.createElement("div");
+        addressItem.className = "address-item";
+        addressItem.innerHTML = `
+          <textarea name="deliveryAddress" required placeholder="e.g., No 456, Galle Road, Colombo 03"></textarea>
+          <button type="button" class="remove-button" onclick="this.parentElement.remove()">Remove</button>
+        `;
+        addressesDiv.appendChild(addressItem);
+      }
+
+      // Submit order form
       document
         .getElementById("orderForm")
         .addEventListener("submit", async (e) => {
           e.preventDefault();
-          const id =
-            document.getElementById("orderId").value || Date.now().toString();
-          const clientId = document.getElementById("clientId").value;
 
-          await fetch("http://localhost:4000/api/orders", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              id,
-              clientId,
-              items: [{ sku: "SKU-001", qty: 1 }],
-              addresses: ["No. 1, Flower Rd, Colombo 7"],
-            }),
-          });
+          // Collect form data
+          const orderId = document.getElementById("orderId").value;
+          const clientId = document.getElementById("clientId").value;
+          const priority = document.getElementById("priority").value;
+
+          // Collect packages
+          const packages = Array.from(
+            document.querySelectorAll(".package-item")
+          ).map((item) => ({
+            sku: item.querySelector('input[name="packageSku"]').value,
+            description: item.querySelector('input[name="packageDesc"]').value,
+            quantity:
+              parseInt(item.querySelector('input[name="packageQty"]').value) ||
+              1,
+            priority: item.querySelector('select[name="packagePriority"]')
+              .value,
+          }));
+
+          // Collect delivery addresses
+          const deliveryAddresses = Array.from(
+            document.querySelectorAll('textarea[name="deliveryAddress"]')
+          )
+            .map((textarea) => textarea.value.trim())
+            .filter((addr) => addr.length > 0);
+
+          const orderData = {
+            id: orderId,
+            clientId,
+            priority,
+            packages,
+            deliveryAddresses,
+          };
+
+          try {
+            const response = await fetch("http://localhost:4000/api/orders", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(orderData),
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+              alert(
+                `Order submitted successfully! Order ID: ${result.orderId}`
+              );
+              document.getElementById("orderForm").reset();
+            } else {
+              alert(
+                `Order submission failed: ${result.error || result.message}`
+              );
+            }
+          } catch (error) {
+            alert(`Error submitting order: ${error.message}`);
+          }
         });
     </script>
   </body>

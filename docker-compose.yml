@@ -12,3 +12,22 @@ services:
     ports:
       - "9092:9092"
     restart: unless-stopped
+
+  driver-service:
+    build:
+      context: ./services/driver-service
+      dockerfile_inline: |
+        FROM node:18-alpine
+        WORKDIR /app
+        COPY package*.json ./
+        RUN npm install
+        COPY . .
+        EXPOSE 4001
+        CMD ["npm", "start"]
+    ports:
+      - "4001:4001"
+    environment:
+      - KAFKA_BROKER=redpanda:9092
+    depends_on:
+      - redpanda
+    restart: unless-stopped

@@ -116,3 +116,6 @@ export abstract class BaseProducer<T> {
     }
   }
 }
+
+// Export the KafkaClient class
+export { KafkaClient };

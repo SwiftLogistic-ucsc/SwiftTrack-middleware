@@ -49,7 +49,7 @@ export class WMSAdapter {
         deliveryAddresses: order.deliveryAddresses.map((addr, index) => ({
           addressIndex: index + 1,
           address: addr,
-          encodedAddress: Buffer.from(addr).toString("base64"),
+          encodedAddress: Buffer.from(JSON.stringify(addr)).toString("base64"),
         })),
       },
     };

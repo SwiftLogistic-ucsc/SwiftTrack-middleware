@@ -1,0 +1,571 @@
+{
+  "info": {
+    "name": "SwiftTrack Middleware API Collection",
+    "description": "Complete API collection for testing SwiftTrack Order and Driver Services with Mock Systems",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": "1.0.0"
+  },
+  "item": [
+    {
+      "name": "Order Service",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{order_service_url}}/health",
+              "host": ["{{order_service_url}}"],
+              "path": ["health"]
+            }
+          }
+        },
+        {
+          "name": "Create Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"{{test_order_id}}\",\n  \"clientId\": \"CLIENT-001\",\n  \"customerName\": \"John Smith\",\n  \"customerEmail\": \"john.smith@example.com\",\n  \"customerPhone\": \"+94771234567\",\n  \"packages\": [\n    {\n      \"sku\": \"ELECTRONICS-001\",\n      \"description\": \"Smartphone\",\n      \"quantity\": 1,\n      \"weight\": 0.5,\n      \"priority\": \"STANDARD\"\n    },\n    {\n      \"sku\": \"BOOK-001\",\n      \"description\": \"Programming Book\",\n      \"quantity\": 2,\n      \"weight\": 1.0,\n      \"priority\": \"STANDARD\"\n    }\n  ],\n  \"deliveryAddresses\": [\n    {\n      \"street\": \"123 Main Street, Colombo 07\",\n      \"city\": \"Colombo\",\n      \"postalCode\": \"00700\",\n      \"country\": \"Sri Lanka\",\n      \"latitude\": 6.9271,\n      \"longitude\": 79.8612,\n      \"timeWindow\": {\n        \"start\": \"09:00\",\n        \"end\": \"17:00\"\n      }\n    }\n  ],\n  \"priority\": \"STANDARD\"\n}"
+            },
+            "url": {
+              "raw": "{{order_service_url}}/api/orders",
+              "host": ["{{order_service_url}}"],
+              "path": ["api", "orders"]
+            }
+          }
+        },
+        {
+          "name": "Get Order by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{order_service_url}}/api/orders/{{test_order_id}}",
+              "host": ["{{order_service_url}}"],
+              "path": ["api", "orders", "{{test_order_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Get Order Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{order_service_url}}/api/orders/{{test_order_id}}/status",
+              "host": ["{{order_service_url}}"],
+              "path": ["api", "orders", "{{test_order_id}}", "status"]
+            }
+          }
+        },
+        {
+          "name": "Get All Orders",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{order_service_url}}/api/orders",
+              "host": ["{{order_service_url}}"],
+              "path": ["api", "orders"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Driver Service",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{driver_service_url}}/health",
+              "host": ["{{driver_service_url}}"],
+              "path": ["health"]
+            }
+          }
+        },
+        {
+          "name": "Register Driver",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Kamal Silva\",\n  \"licenseNumber\": \"LIC-001-2025\",\n  \"vehicleType\": \"VAN\",\n  \"vehiclePlate\": \"WP-CAB-1234\",\n  \"phoneNumber\": \"+94771111111\"\n}"
+            },
+            "url": {
+              "raw": "{{driver_service_url}}/api/drivers/register",
+              "host": ["{{driver_service_url}}"],
+              "path": ["api", "drivers", "register"]
+            }
+          }
+        },
+        {
+          "name": "Driver Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentLocation\": {\n    \"latitude\": 6.9271,\n    \"longitude\": 79.8612\n  }\n}"
+            },
+            "url": {
+              "raw": "{{driver_service_url}}/api/drivers/{{test_driver_id}}/login",
+              "host": ["{{driver_service_url}}"],
+              "path": ["api", "drivers", "{{test_driver_id}}", "login"]
+            }
+          }
+        },
+        {
+          "name": "Get Driver Manifest",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{driver_service_url}}/api/drivers/{{test_driver_id}}/manifest",
+              "host": ["{{driver_service_url}}"],
+              "path": ["api", "drivers", "{{test_driver_id}}", "manifest"]
+            }
+          }
+        },
+        {
+          "name": "Get Driver Manifest with Date",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{driver_service_url}}/api/drivers/{{test_driver_id}}/manifest?date=2025-09-09",
+              "host": ["{{driver_service_url}}"],
+              "path": ["api", "drivers", "{{test_driver_id}}", "manifest"],
+              "query": [
+                {
+                  "key": "date",
+                  "value": "2025-09-09"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Delivery Status (POST)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"IN_TRANSIT\",\n  \"location\": {\n    \"latitude\": 6.9271,\n    \"longitude\": 79.8612\n  },\n  \"notes\": \"Package picked up from warehouse\",\n  \"timestamp\": \"2025-09-09T10:30:00Z\"\n}"
+            },
+            "url": {
+              "raw": "{{driver_service_url}}/api/drivers/{{test_driver_id}}/deliveries/{{test_order_id}}/status",
+              "host": ["{{driver_service_url}}"],
+              "path": [
+                "api",
+                "drivers",
+                "{{test_driver_id}}",
+                "deliveries",
+                "{{test_order_id}}",
+                "status"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Delivery Status (PUT)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"DELIVERED\",\n  \"location\": {\n    \"latitude\": 6.9271,\n    \"longitude\": 79.8612\n  },\n  \"customerName\": \"John Smith\",\n  \"timestamp\": \"2025-09-09T11:30:00Z\"\n}"
+            },
+            "url": {
+              "raw": "{{driver_service_url}}/api/drivers/{{test_driver_id}}/deliveries/{{test_order_id}}/status",
+              "host": ["{{driver_service_url}}"],
+              "path": [
+                "api",
+                "drivers",
+                "{{test_driver_id}}",
+                "deliveries",
+                "{{test_order_id}}",
+                "status"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Upload Proof of Delivery",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "customerName",
+                  "value": "John Smith",
+                  "type": "text"
+                },
+                {
+                  "key": "notes",
+                  "value": "Package delivered successfully",
+                  "type": "text"
+                },
+                {
+                  "key": "photo",
+                  "type": "file",
+                  "src": "",
+                  "description": "Upload a photo file"
+                },
+                {
+                  "key": "signature",
+                  "type": "file",
+                  "src": "",
+                  "description": "Upload a signature file"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{driver_service_url}}/api/drivers/{{test_driver_id}}/deliveries/{{test_order_id}}/proof",
+              "host": ["{{driver_service_url}}"],
+              "path": [
+                "api",
+                "drivers",
+                "{{test_driver_id}}",
+                "deliveries",
+                "{{test_order_id}}",
+                "proof"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Route Updates",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{driver_service_url}}/api/drivers/{{test_driver_id}}/route-updates",
+              "host": ["{{driver_service_url}}"],
+              "path": ["api", "drivers", "{{test_driver_id}}", "route-updates"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "CMS Mock Service",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{cms_url}}/health",
+              "host": ["{{cms_url}}"],
+              "path": ["health"]
+            }
+          }
+        },
+        {
+          "name": "Contract Verification",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orderId\": \"{{test_order_id}}\",\n  \"clientId\": \"CLIENT-001\",\n  \"packages\": [\n    {\n      \"sku\": \"ELECTRONICS-001\",\n      \"quantity\": 1\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{cms_url}}/verify",
+              "host": ["{{cms_url}}"],
+              "path": ["verify"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "WMS Mock Service",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{wms_url}}/health",
+              "host": ["{{wms_url}}"],
+              "path": ["health"]
+            }
+          }
+        },
+        {
+          "name": "Package Registration",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orderId\": \"{{test_order_id}}\",\n  \"clientId\": \"CLIENT-001\",\n  \"packages\": [\n    {\n      \"sku\": \"ELECTRONICS-001\",\n      \"description\": \"Smartphone\",\n      \"quantity\": 1,\n      \"priority\": \"STANDARD\"\n    }\n  ],\n  \"deliveryAddresses\": [\n    {\n      \"street\": \"123 Main Street, Colombo 07\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{wms_url}}/register",
+              "host": ["{{wms_url}}"],
+              "path": ["register"]
+            }
+          }
+        },
+        {
+          "name": "Get All Inventory",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{wms_url}}/inventory",
+              "host": ["{{wms_url}}"],
+              "path": ["inventory"]
+            }
+          }
+        },
+        {
+          "name": "Get Specific SKU Inventory",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{wms_url}}/inventory/ELECTRONICS-001",
+              "host": ["{{wms_url}}"],
+              "path": ["inventory", "ELECTRONICS-001"]
+            }
+          }
+        },
+        {
+          "name": "Get Warehouse Zones",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{wms_url}}/zones",
+              "host": ["{{wms_url}}"],
+              "path": ["zones"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "ROS Mock Service",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{ros_url}}/health",
+              "host": ["{{ros_url}}"],
+              "path": ["health"]
+            }
+          }
+        },
+        {
+          "name": "Route Optimization",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orderId\": \"{{test_order_id}}\",\n  \"deliveryAddresses\": [\n    {\n      \"street\": \"123 Main Street, Colombo 07\",\n      \"latitude\": 6.9271,\n      \"longitude\": 79.8612\n    }\n  ],\n  \"packages\": [\n    {\n      \"sku\": \"ELECTRONICS-001\",\n      \"quantity\": 1,\n      \"priority\": \"STANDARD\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{ros_url}}/optimize",
+              "host": ["{{ros_url}}"],
+              "path": ["optimize"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Notification Service",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{notification_url}}/health",
+              "host": ["{{notification_url}}"],
+              "path": ["health"]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "order_service_url",
+      "value": "http://localhost:4000",
+      "type": "string"
+    },
+    {
+      "key": "driver_service_url",
+      "value": "http://localhost:4001",
+      "type": "string"
+    },
+    {
+      "key": "cms_url",
+      "value": "http://localhost:5001",
+      "type": "string"
+    },
+    {
+      "key": "wms_url",
+      "value": "http://localhost:5002",
+      "type": "string"
+    },
+    {
+      "key": "ros_url",
+      "value": "http://localhost:5003",
+      "type": "string"
+    },
+    {
+      "key": "notification_url",
+      "value": "http://localhost:3002",
+      "type": "string"
+    },
+    {
+      "key": "test_order_id",
+      "value": "ORD-POSTMAN-001",
+      "type": "string"
+    },
+    {
+      "key": "test_driver_id",
+      "value": "DRV-001",
+      "type": "string"
+    }
+  ]
+}

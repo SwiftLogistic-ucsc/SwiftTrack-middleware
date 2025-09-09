@@ -60,7 +60,8 @@ const vehicleFleet = {
     type: "VAN",
     capacity: 50,
     currentLoad: 25,
-    driver: "Kamal Perera",
+    driver: "DRV-001",
+    driverName: "Kamal Perera",
     status: "AVAILABLE",
     zone: "METRO",
   },
@@ -68,7 +69,8 @@ const vehicleFleet = {
     type: "VAN",
     capacity: 50,
     currentLoad: 30,
-    driver: "Nimal Silva",
+    driver: "DRV-002",
+    driverName: "Nimal Silva",
     status: "ON_ROUTE",
     zone: "METRO",
   },
@@ -76,7 +78,8 @@ const vehicleFleet = {
     type: "MOTORCYCLE",
     capacity: 10,
     currentLoad: 5,
-    driver: "Sunil Fernando",
+    driver: "DRV-003",
+    driverName: "Sunil Fernando",
     status: "AVAILABLE",
     zone: "METRO",
   },
@@ -84,7 +87,8 @@ const vehicleFleet = {
     type: "MOTORCYCLE",
     capacity: 10,
     currentLoad: 8,
-    driver: "Ravi Jayasinghe",
+    driver: "DRV-004",
+    driverName: "Ravi Jayasinghe",
     status: "AVAILABLE",
     zone: "SUBURBAN",
   },
@@ -92,7 +96,8 @@ const vehicleFleet = {
     type: "TRUCK",
     capacity: 100,
     currentLoad: 60,
-    driver: "Prasad Wickramasinghe",
+    driver: "DRV-005",
+    driverName: "Prasad Wickramasinghe",
     status: "AVAILABLE",
     zone: "OUTSTATION",
   },
@@ -261,9 +266,46 @@ function analyzeDeliveryRoute(addresses, packages) {
 
   const zones = addresses
     .map((addr) => {
-      const zone = Object.keys(deliveryZones).find((z) =>
-        addr.toLowerCase().includes(z.toLowerCase().replace(/\s/g, ""))
-      );
+      // Handle both string addresses and address objects
+      let addressString;
+      if (typeof addr === "string") {
+        addressString = addr;
+      } else if (addr && typeof addr === "object") {
+        // Convert address object to string for zone matching
+        addressString = `${addr.street || ""} ${addr.city || ""} ${
+          addr.postalCode || ""
+        } ${addr.country || ""}`.trim();
+      } else {
+        addressString = "";
+      }
+
+      console.log("Trying to match address:", addressString);
+
+      // Improved zone matching logic
+      const zone = Object.keys(deliveryZones).find((zoneName) => {
+        const normalizedZone = zoneName.toLowerCase().replace(/\s/g, "");
+        const normalizedAddress = addressString
+          .toLowerCase()
+          .replace(/\s/g, "");
+
+        console.log(
+          `Checking zone "${zoneName}" (${normalizedZone}) against address (${normalizedAddress})`
+        );
+
+        // Try multiple matching strategies
+        const matches =
+          normalizedAddress.includes(normalizedZone) || // Original logic
+          normalizedAddress.includes(zoneName.toLowerCase()) || // With spaces
+          addressString.toLowerCase().includes(zoneName.toLowerCase()) || // Case insensitive with spaces
+          // Special case for Colombo areas
+          (zoneName.startsWith("Colombo") &&
+            addressString.toLowerCase().includes("colombo"));
+
+        console.log(`Match result: ${matches}`);
+        return matches;
+      });
+
+      console.log("Selected zone:", zone);
       return zone ? deliveryZones[zone] : null;
     })
     .filter(Boolean);

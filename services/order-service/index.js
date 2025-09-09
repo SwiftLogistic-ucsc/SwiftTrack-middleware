@@ -5,6 +5,7 @@ import { CMSAdapter } from "./adapters/cmsAdapter.js";
 import { WMSAdapter } from "./adapters/wmsAdapter.js";
 import { ROSAdapter } from "./adapters/rosAdapter.js";
 import { getLogger } from "@swifttrack/logger";
+import { DatabaseClient, OrderRepository } from "@swifttrack/database";
 
 dotenv.config();
 const logger = getLogger("order-service");
@@ -45,6 +46,24 @@ const TOPIC = process.env.ORDER_EVENTS_TOPIC;
 const CMS_URL = process.env.CMS_URL;
 const WMS_URL = process.env.WMS_URL;
 const ROS_URL = process.env.ROS_URL;
+const DATABASE_URL =
+  process.env.DATABASE_URL ||
+  "postgresql://user:password@localhost:5432/orderdb";
+
+// Initialize database connection
+const dbClient = new DatabaseClient(DATABASE_URL);
+const orderRepo = new OrderRepository(dbClient);
+
+// Test database connection
+dbClient.testConnection().then((result) => {
+  if (result.connected) {
+    logger.info("Database connected successfully", {
+      timestamp: result.timestamp,
+    });
+  } else {
+    logger.error("Database connection failed", { error: result.error });
+  }
+});
 
 // Initialize protocol adapters for heterogeneous systems integration
 const cmsAdapter = new CMSAdapter(CMS_URL);
@@ -116,6 +135,13 @@ app.post("/api/orders", async (req, res) => {
       }
     );
 
+    // Save order to database
+    const savedOrder = await orderRepo.createOrder(order);
+    logger.info(`Order ${order.id} saved to database`, {
+      orderId: savedOrder.id,
+      status: savedOrder.status,
+    });
+
     // Emit initial order submission event for real-time tracking
     await emitEvent(TOPIC, {
       eventType: "ORDER_SUBMITTED",
@@ -164,6 +190,15 @@ app.post("/api/orders", async (req, res) => {
       duration: cmsDuration,
     });
 
+    // Update order in database with CMS data
+    await orderRepo.updateOrderStatus(order.id, "CMS_VERIFIED", {
+      cms: {
+        contractId: cms.contractId,
+        billingStatus: cms.billingStatus,
+        estimatedCost: cms.estimatedCost || 0,
+      },
+    });
+
     await emitEvent(TOPIC, {
       eventType: "CMS_VERIFIED",
       orderId: order.id,
@@ -210,6 +245,15 @@ app.post("/api/orders", async (req, res) => {
       warehouseLocation: wms.warehouseLocation,
       estimatedReadyTime: wms.estimatedReadyTime,
       duration: wmsDuration,
+    });
+
+    // Update order in database with WMS data
+    await orderRepo.updateOrderStatus(order.id, "WMS_REGISTERED", {
+      wms: {
+        packageId: wms.packageId,
+        warehouseLocation: wms.warehouseLocation,
+        estimatedReadyTime: wms.estimatedReadyTime,
+      },
     });
 
     await emitEvent(TOPIC, {
@@ -261,6 +305,18 @@ app.post("/api/orders", async (req, res) => {
       duration: rosDuration,
     });
 
+    // Update order in database with ROS data
+    await orderRepo.updateOrderStatus(order.id, "ROS_OPTIMIZED", {
+      ros: {
+        routeId: ros.routeId,
+        assignedDriver: ros.assignedDriver,
+        assignedVehicle: ros.assignedVehicle,
+        optimizedStops: ros.optimizedStops,
+        estimatedDelivery: ros.estimatedDelivery,
+        etaMinutes: ros.etaMinutes,
+      },
+    });
+
     await emitEvent(TOPIC, {
       eventType: "ROS_OPTIMIZED",
       orderId: order.id,
@@ -273,7 +329,9 @@ app.post("/api/orders", async (req, res) => {
     });
     logger.debug(`Emitted ROS_OPTIMIZED event for order ${order.id}`);
 
-    // Final completion event
+    // Final completion event and database update
+    await orderRepo.updateOrderStatus(order.id, "READY_FOR_DELIVERY");
+
     await emitEvent(TOPIC, {
       eventType: "ORDER_READY_FOR_DELIVERY",
       orderId: order.id,
@@ -361,6 +419,172 @@ app.post("/api/orders", async (req, res) => {
       status: "failed",
       message:
         "Order processing failed. Please contact Swift Logistics support.",
+    });
+  }
+});
+
+// Get order details by ID
+app.get("/api/orders/:orderId", async (req, res) => {
+  try {
+    const { orderId } = req.params;
+
+    logger.info(`Retrieving order details for ${orderId}`);
+
+    const order = await orderRepo.getOrderById(orderId);
+
+    if (!order) {
+      logger.warn(`Order not found: ${orderId}`);
+      return res.status(404).json({
+        error: "Order not found",
+        orderId,
+      });
+    }
+
+    logger.info(`Order details retrieved for ${orderId}`, {
+      status: order.status,
+      clientId: order.client_id,
+      packageCount: order.packages.length,
+      deliveryCount: order.deliveryAddresses.length,
+    });
+
+    res.json({
+      ok: true,
+      order: {
+        id: order.id,
+        clientId: order.client_id,
+        clientName: order.client_name,
+        status: order.status,
+        priority: order.priority,
+        packages: order.packages,
+        deliveryAddresses: order.deliveryAddresses.map((addr) => addr.address),
+
+        // Processing details
+        contractId: order.contract_id,
+        billingStatus: order.billing_status,
+        estimatedCost: order.estimated_cost,
+        warehousePackageId: order.warehouse_package_id,
+        warehouseLocation: order.warehouse_location,
+        routeId: order.route_id,
+        assignedDriver: order.assigned_driver_id,
+        assignedVehicle: order.assigned_vehicle_id,
+        estimatedDelivery: order.estimated_delivery_time,
+
+        // Timestamps
+        submittedAt: order.submitted_at,
+        cmsVerifiedAt: order.cms_verified_at,
+        wmsRegisteredAt: order.wms_registered_at,
+        rosOptimizedAt: order.ros_optimized_at,
+        readyForDeliveryAt: order.ready_for_delivery_at,
+      },
+    });
+  } catch (err) {
+    logger.error(`Failed to retrieve order ${req.params.orderId}`, {
+      error: err.message,
+      stack: err.stack,
+    });
+
+    res.status(500).json({
+      error: "Failed to retrieve order",
+      message: err.message,
+    });
+  }
+});
+
+// Get order status by ID
+app.get("/api/orders/:orderId/status", async (req, res) => {
+  try {
+    const { orderId } = req.params;
+
+    logger.info(`Retrieving order status for ${orderId}`);
+
+    const order = await orderRepo.getOrderById(orderId);
+
+    if (!order) {
+      logger.warn(`Order not found: ${orderId}`);
+      return res.status(404).json({
+        error: "Order not found",
+        orderId,
+      });
+    }
+
+    // Get order events to show processing steps
+    const events = await orderRepo.getOrderEvents(orderId);
+
+    logger.info(`Order status retrieved for ${orderId}`, {
+      status: order.status,
+      eventsCount: events.length,
+    });
+
+    res.json({
+      ok: true,
+      orderId: order.id,
+      status: order.status,
+      priority: order.priority,
+      steps: events.map((event) => ({
+        step: event.event_type,
+        status: "COMPLETED",
+        timestamp: event.created_at,
+        details: event.event_data,
+      })),
+      currentStage: {
+        cms: order.cms_verified_at ? "COMPLETED" : "PENDING",
+        wms: order.wms_registered_at ? "COMPLETED" : "PENDING",
+        ros: order.ros_optimized_at ? "COMPLETED" : "PENDING",
+        delivery: order.ready_for_delivery_at ? "READY" : "PENDING",
+      },
+      timestamps: {
+        submitted: order.submitted_at,
+        cmsVerified: order.cms_verified_at,
+        wmsRegistered: order.wms_registered_at,
+        rosOptimized: order.ros_optimized_at,
+        readyForDelivery: order.ready_for_delivery_at,
+      },
+    });
+  } catch (err) {
+    logger.error(`Failed to retrieve order status ${req.params.orderId}`, {
+      error: err.message,
+      stack: err.stack,
+    });
+
+    res.status(500).json({
+      error: "Failed to retrieve order status",
+      message: err.message,
+    });
+  }
+});
+
+// Get all orders
+app.get("/api/orders", async (req, res) => {
+  try {
+    logger.info("Retrieving all orders");
+
+    const orders = await orderRepo.getAllOrders();
+
+    logger.info(`Retrieved ${orders.length} orders from database`);
+
+    res.json({
+      ok: true,
+      orders: orders.map((order) => ({
+        order_id: order.id,
+        client_id: order.client_id,
+        status: order.status,
+        priority: order.priority,
+        total_packages: order.total_packages,
+        total_delivery_addresses: order.total_delivery_addresses,
+        created_at: order.created_at,
+        updated_at: order.updated_at,
+        customer_name: order.customer_name || "Unknown", // Fallback for missing field
+      })),
+    });
+  } catch (err) {
+    logger.error("Failed to retrieve orders", {
+      error: err.message,
+      stack: err.stack,
+    });
+
+    res.status(500).json({
+      error: "Failed to retrieve orders",
+      message: err.message,
     });
   }
 });

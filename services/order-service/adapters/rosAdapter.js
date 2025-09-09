@@ -110,6 +110,25 @@ export class ROSAdapter {
    * Simulate geocoding for addresses
    */
   geocodeAddress(address) {
+    // Handle both string addresses and address objects
+    let addressString;
+    if (typeof address === "string") {
+      addressString = address;
+    } else if (address && typeof address === "object") {
+      // Convert address object to string for geocoding
+      addressString = `${address.street || ""} ${address.city || ""} ${
+        address.postalCode || ""
+      } ${address.country || ""}`.trim();
+    } else {
+      addressString = "";
+    }
+
+    console.log("ROS Adapter - Geocoding address", {
+      inputType: typeof address,
+      addressString,
+      originalAddress: typeof address === "object" ? address : "string",
+    });
+
     // Simulated coordinates for Sri Lankan locations
     const locationMap = {
       colombo: { lat: 6.9271, lng: 79.8612 },
@@ -120,7 +139,7 @@ export class ROSAdapter {
     };
 
     for (const [city, coords] of Object.entries(locationMap)) {
-      if (address.toLowerCase().includes(city)) {
+      if (addressString.toLowerCase().includes(city)) {
         // Add some random variation
         return {
           latitude: coords.lat + (Math.random() - 0.5) * 0.01,
@@ -129,6 +148,21 @@ export class ROSAdapter {
           geocodingService: "Google Maps API",
         };
       }
+    }
+
+    // If address object has coordinates, use them
+    if (
+      address &&
+      typeof address === "object" &&
+      address.latitude &&
+      address.longitude
+    ) {
+      return {
+        latitude: address.latitude,
+        longitude: address.longitude,
+        accuracy: "PROVIDED",
+        geocodingService: "Direct Coordinates",
+      };
     }
 
     // Default coordinates for Colombo
@@ -202,7 +236,9 @@ export class ROSAdapter {
           {
             attempt,
             maxRetries: this.maxRetries,
-            error: error.message,
+            error: error.message || error.toString(),
+            errorType: error.constructor.name,
+            httpStatus: error.response?.status,
             nextRetryIn: `${backoffDelay}ms`,
           }
         );
@@ -210,6 +246,16 @@ export class ROSAdapter {
         await new Promise((resolve) => setTimeout(resolve, backoffDelay));
         return this.makeRequestWithRetry(url, payload, attempt + 1);
       }
+
+      // Add more context to the error before throwing
+      console.error("ROS Adapter - Final request failure", {
+        url,
+        attempt,
+        error: error.message || error.toString(),
+        errorType: error.constructor.name,
+        httpStatus: error.response?.status,
+        httpData: error.response?.data,
+      });
 
       throw error;
     }
@@ -278,16 +324,30 @@ export class ROSAdapter {
     } catch (error) {
       const duration = Date.now() - startTime;
 
+      // Better error message extraction
+      let errorMessage = "Unknown error";
+      if (error.message) {
+        errorMessage = error.message;
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.response?.statusText) {
+        errorMessage = `HTTP ${error.response.status}: ${error.response.statusText}`;
+      } else if (error.code) {
+        errorMessage = `Network error: ${error.code}`;
+      }
+
       console.error("ROS Adapter - Cloud REST/JSON communication failed", {
         orderId: order.id,
-        error: error.message,
+        error: errorMessage,
+        fullError: error.toString(),
         duration,
         protocolIssue: "Cloud API communication failure",
         httpStatus: error.response?.status,
         cloudProvider: "AWS",
+        stack: error.stack,
       });
 
-      throw new Error(`ROS Cloud Adapter failed: ${error.message}`);
+      throw new Error(`ROS Cloud Adapter failed: ${errorMessage}`);
     }
   }
 }

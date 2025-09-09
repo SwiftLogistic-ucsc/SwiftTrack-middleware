@@ -102,6 +102,129 @@
         border-radius: 3px;
         background: #fafafa;
       }
+      .order-search {
+        margin: 20px 0;
+        padding: 15px;
+        background: #f8f9fa;
+        border-radius: 5px;
+        border: 1px solid #dee2e6;
+      }
+      .order-details {
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        margin: 10px 0;
+        padding: 15px;
+      }
+      .order-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid #eee;
+        padding-bottom: 10px;
+        margin-bottom: 15px;
+      }
+      .status-badge {
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: bold;
+        text-transform: uppercase;
+      }
+      .status-submitted {
+        background: #e3f2fd;
+        color: #1976d2;
+      }
+      .status-cms_verified {
+        background: #f3e5f5;
+        color: #7b1fa2;
+      }
+      .status-wms_registered {
+        background: #fff3e0;
+        color: #f57c00;
+      }
+      .status-ros_optimized {
+        background: #e8f5e8;
+        color: #388e3c;
+      }
+      .status-ready_for_delivery {
+        background: #e1f5fe;
+        color: #0277bd;
+      }
+      .status-out_for_delivery {
+        background: #fff8e1;
+        color: #f9a825;
+      }
+      .status-delivered {
+        background: #e8f5e8;
+        color: #2e7d32;
+      }
+      .status-failed {
+        background: #ffebee;
+        color: #c62828;
+      }
+      .order-info {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 15px;
+        margin: 10px 0;
+      }
+      .info-group {
+        background: #f8f9fa;
+        padding: 10px;
+        border-radius: 3px;
+      }
+      .info-label {
+        font-weight: bold;
+        color: #495057;
+        font-size: 12px;
+        text-transform: uppercase;
+        margin-bottom: 5px;
+      }
+      .info-value {
+        color: #212529;
+      }
+      .packages-list {
+        background: #f8f9fa;
+        padding: 10px;
+        border-radius: 3px;
+        margin: 10px 0;
+      }
+      .package-detail {
+        background: white;
+        padding: 8px;
+        margin: 5px 0;
+        border-radius: 3px;
+        border-left: 3px solid #3498db;
+      }
+      .search-controls {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      .search-input {
+        flex: 1;
+        min-width: 200px;
+      }
+      .orders-list {
+        max-height: 600px;
+        overflow-y: auto;
+      }
+      .loading {
+        text-align: center;
+        color: #6c757d;
+        font-style: italic;
+        padding: 20px;
+      }
+      .no-orders {
+        text-align: center;
+        color: #6c757d;
+        padding: 40px;
+        background: #f8f9fa;
+        border-radius: 5px;
+        margin: 20px 0;
+      }
     </style>
   </head>
   <body>
@@ -181,7 +304,35 @@
         <button type="submit">Submit Order to Swift Logistics</button>
       </form>
 
-      <h3>Live Order Tracking</h3>
+      <!-- Order Search and History Section -->
+      <div class="form-section">
+        <h3>📋 Order History & Tracking</h3>
+        <div class="order-search">
+          <div class="search-controls">
+            <input
+              type="text"
+              id="searchOrderId"
+              placeholder="Search by Order ID (e.g., ORD-POSTMAN-001)"
+              class="search-input"
+            />
+            <button type="button" onclick="searchOrder()">
+              🔍 Search Order
+            </button>
+            <button type="button" onclick="loadAllOrders()">
+              📄 Load All Orders
+            </button>
+            <button type="button" onclick="clearOrderHistory()">
+              🗑️ Clear
+            </button>
+          </div>
+        </div>
+
+        <div id="orderHistorySection">
+          <div id="orderResults" class="orders-list"></div>
+        </div>
+      </div>
+
+      <h3>📡 Live Order Tracking</h3>
       <ul id="feed" class="feed"></ul>
     </div>
 
@@ -300,6 +451,12 @@
                 `Order submitted successfully! Order ID: ${result.orderId}`
               );
               document.getElementById("orderForm").reset();
+
+              // Auto-search for the newly created order
+              setTimeout(() => {
+                document.getElementById("searchOrderId").value = result.orderId;
+                searchOrder();
+              }, 1000);
             } else {
               alert(
                 `Order submission failed: ${result.error || result.message}`
@@ -307,6 +464,202 @@
             }
           } catch (error) {
             alert(`Error submitting order: ${error.message}`);
+          }
+        });
+
+      // Order search and history functions
+      async function searchOrder() {
+        const orderId = document.getElementById("searchOrderId").value.trim();
+        if (!orderId) {
+          alert("Please enter an Order ID to search");
+          return;
+        }
+
+        showLoading();
+        try {
+          const response = await fetch(
+            `http://localhost:4000/api/orders/${orderId}`
+          );
+          const result = await response.json();
+
+          if (response.ok && result.order) {
+            displayOrders([result.order]);
+          } else {
+            showNoOrdersMessage(`Order "${orderId}" not found`);
+          }
+        } catch (error) {
+          showNoOrdersMessage(`Error searching for order: ${error.message}`);
+        }
+      }
+
+      async function loadAllOrders() {
+        showLoading();
+        try {
+          const response = await fetch("http://localhost:4000/api/orders");
+          const result = await response.json();
+
+          if (response.ok && result.orders && result.orders.length > 0) {
+            displayOrders(result.orders);
+          } else {
+            showNoOrdersMessage("No orders found");
+          }
+        } catch (error) {
+          showNoOrdersMessage(`Error loading orders: ${error.message}`);
+        }
+      }
+
+      function displayOrders(orders) {
+        const resultsDiv = document.getElementById("orderResults");
+        resultsDiv.innerHTML = orders
+          .map((order) => createOrderCard(order))
+          .join("");
+      }
+
+      function createOrderCard(order) {
+        const statusClass = `status-${order.status
+          .toLowerCase()
+          .replace(/_/g, "_")}`;
+        const createdDate = new Date(
+          order.submittedAt || order.created_at
+        ).toLocaleString();
+
+        return `
+          <div class="order-details">
+            <div class="order-header">
+              <h4>Order ${order.id}</h4>
+              <span class="status-badge ${statusClass}">${order.status.replace(
+          /_/g,
+          " "
+        )}</span>
+            </div>
+            
+            <div class="order-info">
+              <div class="info-group">
+                <div class="info-label">Client</div>
+                <div class="info-value">${
+                  order.clientName || order.clientId
+                }</div>
+              </div>
+              <div class="info-group">
+                <div class="info-label">Priority</div>
+                <div class="info-value">${order.priority}</div>
+              </div>
+              <div class="info-group">
+                <div class="info-label">Created</div>
+                <div class="info-value">${createdDate}</div>
+              </div>
+              <div class="info-group">
+                <div class="info-label">Driver</div>
+                <div class="info-value">${
+                  order.assignedDriver || "Not assigned"
+                }</div>
+              </div>
+            </div>
+
+            ${
+              order.packages && order.packages.length > 0
+                ? `
+              <div class="packages-list">
+                <div class="info-label">Packages (${
+                  order.packages.length
+                })</div>
+                ${order.packages
+                  .map(
+                    (pkg) => `
+                  <div class="package-detail">
+                    <strong>${pkg.sku}</strong> - ${
+                      pkg.description || "No description"
+                    }
+                    <br><small>Qty: ${pkg.quantity} | Priority: ${
+                      pkg.priority
+                    } | Weight: ${pkg.weight_kg || "N/A"}kg</small>
+                  </div>
+                `
+                  )
+                  .join("")}
+              </div>
+            `
+                : ""
+            }
+
+            ${
+              order.deliveryAddresses && order.deliveryAddresses.length > 0
+                ? `
+              <div class="info-group">
+                <div class="info-label">Delivery Addresses</div>
+                <div class="info-value">
+                  ${
+                    Array.isArray(order.deliveryAddresses)
+                      ? order.deliveryAddresses.join("<br>")
+                      : order.deliveryAddresses
+                  }
+                </div>
+              </div>
+            `
+                : ""
+            }
+
+            ${
+              order.estimatedDelivery
+                ? `
+              <div class="info-group">
+                <div class="info-label">Estimated Delivery</div>
+                <div class="info-value">${new Date(
+                  order.estimatedDelivery
+                ).toLocaleString()}</div>
+              </div>
+            `
+                : ""
+            }
+
+            ${
+              order.routeId
+                ? `
+              <div class="info-group">
+                <div class="info-label">Route ID</div>
+                <div class="info-value">${order.routeId}</div>
+              </div>
+            `
+                : ""
+            }
+          </div>
+        `;
+      }
+
+      function showLoading() {
+        document.getElementById("orderResults").innerHTML =
+          '<div class="loading">🔄 Loading orders...</div>';
+      }
+
+      function showNoOrdersMessage(message) {
+        document.getElementById(
+          "orderResults"
+        ).innerHTML = `<div class="no-orders">📋 ${message}</div>`;
+      }
+
+      function clearOrderHistory() {
+        document.getElementById("orderResults").innerHTML = "";
+        document.getElementById("searchOrderId").value = "";
+      }
+
+      // Enhanced real-time tracking with order refresh
+      function refreshOrderInHistory(orderId) {
+        const orderCards = document.querySelectorAll(".order-details h4");
+        for (let card of orderCards) {
+          if (card.textContent.includes(orderId)) {
+            // Refresh this specific order
+            searchOrder();
+            break;
+          }
+        }
+      }
+
+      // Allow Enter key to search
+      document
+        .getElementById("searchOrderId")
+        .addEventListener("keypress", function (event) {
+          if (event.key === "Enter") {
+            searchOrder();
           }
         });
     </script>

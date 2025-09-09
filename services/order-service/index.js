@@ -1,6 +1,11 @@
 import express from "express";
 import dotenv from "dotenv";
-import { startProducer, ensureTopic, emitEvent } from "./kafka.js";
+import {
+  startProducer,
+  ensureTopic,
+  emitEvent,
+  startConsumer,
+} from "./kafka.js";
 import { CMSAdapter } from "./adapters/cmsAdapter.js";
 import { WMSAdapter } from "./adapters/wmsAdapter.js";
 import { ROSAdapter } from "./adapters/rosAdapter.js";
@@ -70,6 +75,18 @@ const cmsAdapter = new CMSAdapter(CMS_URL);
 const wmsAdapter = new WMSAdapter(WMS_URL);
 const rosAdapter = new ROSAdapter(ROS_URL);
 
+// Circuit breaker state for service availability
+const serviceHealth = {
+  cms: { available: true, lastFailure: null, consecutiveFailures: 0 },
+  wms: { available: true, lastFailure: null, consecutiveFailures: 0 },
+  ros: { available: true, lastFailure: null, consecutiveFailures: 0 },
+};
+
+const CIRCUIT_BREAKER_THRESHOLD = 3; // Failures before circuit opens
+const CIRCUIT_BREAKER_TIMEOUT = 30000; // 30 seconds before retry
+const MAX_RETRY_ATTEMPTS = 5;
+const RETRY_DELAY_MS = 2000;
+
 logger.info("SwiftTrack Middleware - Protocol adapters initialized", {
   cmsAdapter: "SOAP/XML Legacy System",
   wmsAdapter: "TCP/IP Proprietary System",
@@ -81,9 +98,210 @@ function now() {
   return new Date().toISOString();
 }
 
+// Circuit breaker functions
+function isServiceAvailable(service) {
+  const health = serviceHealth[service];
+  if (!health.available) {
+    // Check if circuit breaker should reset
+    if (Date.now() - health.lastFailure > CIRCUIT_BREAKER_TIMEOUT) {
+      health.available = true;
+      health.consecutiveFailures = 0;
+      logger.info(`Circuit breaker reset for ${service} service`);
+    }
+  }
+  return health.available;
+}
+
+function recordServiceFailure(service) {
+  const health = serviceHealth[service];
+  health.consecutiveFailures++;
+  health.lastFailure = Date.now();
+
+  if (health.consecutiveFailures >= CIRCUIT_BREAKER_THRESHOLD) {
+    health.available = false;
+    logger.warn(`Circuit breaker opened for ${service} service`, {
+      consecutiveFailures: health.consecutiveFailures,
+      willRetryAfter: CIRCUIT_BREAKER_TIMEOUT,
+    });
+  }
+}
+
+function recordServiceSuccess(service) {
+  const health = serviceHealth[service];
+  if (!health.available || health.consecutiveFailures > 0) {
+    logger.info(`Service ${service} recovered`, {
+      previousFailures: health.consecutiveFailures,
+    });
+  }
+  health.available = true;
+  health.consecutiveFailures = 0;
+  health.lastFailure = null;
+}
+
+// Asynchronous service call with retry and circuit breaker
+async function callServiceWithRetry(
+  serviceName,
+  serviceCall,
+  orderId,
+  retryCount = 0
+) {
+  try {
+    if (!isServiceAvailable(serviceName)) {
+      throw new Error(`${serviceName} service circuit breaker is open`);
+    }
+
+    const result = await serviceCall();
+    recordServiceSuccess(serviceName);
+    return result;
+  } catch (error) {
+    recordServiceFailure(serviceName);
+
+    logger.warn(`Service call failed for ${serviceName}`, {
+      orderId,
+      error: error.message,
+      retryCount,
+      maxRetries: MAX_RETRY_ATTEMPTS,
+    });
+
+    if (retryCount < MAX_RETRY_ATTEMPTS) {
+      // Schedule retry via Kafka event
+      await emitEvent(TOPIC, {
+        eventType: `${serviceName.toUpperCase()}_RETRY_SCHEDULED`,
+        orderId,
+        timestamp: now(),
+        data: {
+          serviceName,
+          retryCount: retryCount + 1,
+          nextRetryAt: new Date(
+            Date.now() + RETRY_DELAY_MS * Math.pow(2, retryCount)
+          ).toISOString(),
+          error: error.message,
+        },
+      });
+
+      // Wait and retry
+      await new Promise((resolve) =>
+        setTimeout(resolve, RETRY_DELAY_MS * Math.pow(2, retryCount))
+      );
+      return await callServiceWithRetry(
+        serviceName,
+        serviceCall,
+        orderId,
+        retryCount + 1
+      );
+    } else {
+      // Max retries exceeded - will be handled by saga compensation
+      throw new Error(
+        `${serviceName} service failed after ${MAX_RETRY_ATTEMPTS} attempts: ${error.message}`
+      );
+    }
+  }
+}
+
+// Saga pattern implementation for distributed transactions
+class OrderProcessingSaga {
+  constructor(orderId) {
+    this.orderId = orderId;
+    this.completedSteps = [];
+    this.compensationActions = [];
+  }
+
+  async executeStep(stepName, serviceCall, compensationAction) {
+    try {
+      logger.info(`Executing saga step: ${stepName}`, {
+        orderId: this.orderId,
+      });
+
+      const result = await serviceCall();
+      this.completedSteps.push(stepName);
+
+      if (compensationAction) {
+        this.compensationActions.push({
+          stepName,
+          action: compensationAction,
+          timestamp: now(),
+        });
+      }
+
+      logger.info(`Saga step completed: ${stepName}`, {
+        orderId: this.orderId,
+        completedSteps: this.completedSteps.length,
+      });
+
+      return result;
+    } catch (error) {
+      logger.error(`Saga step failed: ${stepName}`, {
+        orderId: this.orderId,
+        error: error.message,
+        completedSteps: this.completedSteps,
+      });
+
+      // Trigger compensation
+      await this.compensate();
+      throw error;
+    }
+  }
+
+  async compensate() {
+    logger.warn(`Starting saga compensation for order ${this.orderId}`, {
+      stepsToCompensate: this.compensationActions.length,
+    });
+
+    // Execute compensation actions in reverse order
+    for (let i = this.compensationActions.length - 1; i >= 0; i--) {
+      const compensation = this.compensationActions[i];
+      try {
+        await compensation.action();
+        logger.info(
+          `Compensation executed for step: ${compensation.stepName}`,
+          {
+            orderId: this.orderId,
+          }
+        );
+      } catch (compensationError) {
+        logger.error(`Compensation failed for step: ${compensation.stepName}`, {
+          orderId: this.orderId,
+          error: compensationError.message,
+        });
+      }
+    }
+
+    await emitEvent(TOPIC, {
+      eventType: "ORDER_SAGA_COMPENSATED",
+      orderId: this.orderId,
+      timestamp: now(),
+      data: {
+        compensatedSteps: this.compensationActions.map((c) => c.stepName),
+        reason: "Service failure during processing",
+      },
+    });
+  }
+}
+
+// Compensation actions for each service
+const compensationActions = {
+  cms: async (orderId) => {
+    logger.info(`Compensating CMS verification for order ${orderId}`);
+    // In real system: cancel contract, release credit hold
+    await orderRepo.updateOrderStatus(orderId, "CMS_COMPENSATION_EXECUTED");
+  },
+
+  wms: async (orderId) => {
+    logger.info(`Compensating WMS registration for order ${orderId}`);
+    // In real system: cancel package registration, release warehouse space
+    await orderRepo.updateOrderStatus(orderId, "WMS_COMPENSATION_EXECUTED");
+  },
+
+  ros: async (orderId) => {
+    logger.info(`Compensating ROS optimization for order ${orderId}`);
+    // In real system: cancel route, release driver/vehicle assignment
+    await orderRepo.updateOrderStatus(orderId, "ROS_COMPENSATION_EXECUTED");
+  },
+};
+
 app.post("/api/orders", async (req, res) => {
   const order = req.body;
-  const startTime = Date.now();
+  const submissionTime = Date.now();
 
   logger.info(`Processing new e-commerce order submission`, {
     orderId: order?.id,
@@ -126,76 +344,154 @@ app.post("/api/orders", async (req, res) => {
 
   try {
     logger.info(
-      `Starting Swift Logistics order processing workflow for order ${order.id}`,
+      `Accepting order for asynchronous distributed processing: ${order.id}`,
       {
         clientId: order.clientId,
         packageCount: order.packages.length,
         deliveryCount: order.deliveryAddresses.length,
         priority: order.priority,
+        processingMode: "ASYNCHRONOUS",
+        distributedTransaction: true,
+        sagaPattern: true,
       }
     );
 
-    // Save order to database
+    // Save order to database with PROCESSING status
     const savedOrder = await orderRepo.createOrder(order);
-    logger.info(`Order ${order.id} saved to database`, {
+    logger.info(`Order ${order.id} accepted and queued for processing`, {
       orderId: savedOrder.id,
       status: savedOrder.status,
+      queuedAt: new Date().toISOString(),
     });
 
-    // Emit initial order submission event for real-time tracking
+    // Emit order acceptance event
     await emitEvent(TOPIC, {
-      eventType: "ORDER_SUBMITTED",
+      eventType: "ORDER_ACCEPTED",
       orderId: order.id,
       timestamp: now(),
       data: {
         order,
         status: "PROCESSING",
-        stage: "INITIAL_SUBMISSION",
+        stage: "QUEUED_FOR_PROCESSING",
+        distributedTransaction: true,
+        processingMode: "ASYNCHRONOUS",
+        estimatedProcessingTime: "2-5 minutes",
       },
     });
-    logger.debug(`Emitted ORDER_SUBMITTED event for order ${order.id}`);
 
-    // Step 1: CMS Contract Verification (Legacy SOAP/XML system simulation)
-    logger.info(
-      `Step 1: Starting CMS contract verification for client ${order.clientId}, order ${order.id}`
-    );
-    logger.info(
-      "Heterogeneous Integration - Using SOAP/XML adapter for legacy CMS",
-      {
-        systemType: "LEGACY_ON_PREMISE",
-        protocol: "SOAP/XML",
-        challenge: "Protocol translation from REST/JSON to SOAP/XML",
-      }
-    );
-
-    const cmsStartTime = Date.now();
-    const cms = await cmsAdapter.verifyContract(order);
-    const cmsDuration = Date.now() - cmsStartTime;
-
-    if (!cms.ok) {
-      logger.error(`CMS contract verification failed for order ${order.id}`, {
-        response: cms,
-        duration: cmsDuration,
-        clientId: order.clientId,
-      });
-      throw new Error(
-        `CMS verification failed: ${cms.error || "Contract validation error"}`
-      );
-    }
-
-    logger.info(`CMS contract verification successful for order ${order.id}`, {
-      contractId: cms.contractId,
-      billingStatus: cms.billingStatus,
-      creditLimit: cms.creditLimit,
-      duration: cmsDuration,
+    // Trigger asynchronous distributed transaction processing
+    await emitEvent(TOPIC, {
+      eventType: "DISTRIBUTED_TRANSACTION_START",
+      orderId: order.id,
+      timestamp: now(),
+      data: {
+        order,
+        processingSteps: [
+          "CMS_VERIFICATION",
+          "WMS_REGISTRATION",
+          "ROS_OPTIMIZATION",
+        ],
+        sagaPattern: true,
+        faultTolerance: true,
+        submittedAt: submissionTime,
+      },
     });
+
+    // Return immediate response - order is now processing asynchronously
+    const responseTime = Date.now() - submissionTime;
+    logger.info(`Order ${order.id} accepted for asynchronous processing`, {
+      responseTime,
+      status: "PROCESSING",
+      nextSteps: "Distributed transaction saga initiated",
+    });
+
+    res.status(202).json({
+      // 202 Accepted for asynchronous processing
+      status: "accepted",
+      orderId: order.id,
+      message: "Order accepted and is being processed asynchronously",
+      processing: {
+        status: "PROCESSING",
+        mode: "ASYNCHRONOUS",
+        distributedTransaction: {
+          sagaInitiated: true,
+          faultTolerance: "enabled",
+          consistencyModel: "eventual",
+        },
+        estimatedCompletion: "2-5 minutes",
+        statusEndpoint: `/api/orders/${order.id}/status`,
+        webhookSupport: "available",
+      },
+      tracking: {
+        orderId: order.id,
+        submittedAt: new Date(submissionTime).toISOString(),
+        currentStage: "QUEUED",
+        nextStage: "CMS_VERIFICATION",
+      },
+    });
+  } catch (err) {
+    const responseTime = Date.now() - submissionTime;
+    logger.error(`Order acceptance failed for order ${order.id}`, {
+      error: err.message,
+      responseTime,
+      stack: err.stack,
+      clientId: order.clientId,
+    });
+
+    res.status(500).json({
+      error: "Order acceptance failed",
+      orderId: order.id,
+      message: err.message,
+      status: "FAILED_TO_ACCEPT",
+    });
+  }
+});
+
+// Background distributed transaction processor
+async function processDistributedTransaction(order) {
+  const startTime = Date.now();
+
+  logger.info(
+    `Starting background distributed transaction processing for order ${order.id}`,
+    {
+      orderId: order.id,
+      clientId: order.clientId,
+      processingMode: "BACKGROUND_ASYNC",
+      distributedTransaction: true,
+      sagaPattern: true,
+    }
+  );
+
+  try {
+    // Initialize saga for distributed transaction management
+    const saga = new OrderProcessingSaga(order.id);
+
+    // Step 1: CMS Contract Verification with fault tolerance
+    await emitEvent(TOPIC, {
+      eventType: "CMS_VERIFICATION_STARTED",
+      orderId: order.id,
+      timestamp: now(),
+      data: { stage: "CMS_PROCESSING", step: 1, totalSteps: 3 },
+    });
+
+    const cmsResult = await saga.executeStep(
+      "CMS_VERIFICATION",
+      async () => {
+        return await callServiceWithRetry(
+          "cms",
+          () => cmsAdapter.verifyContract(order),
+          order.id
+        );
+      },
+      () => compensationActions.cms(order.id)
+    );
 
     // Update order in database with CMS data
     await orderRepo.updateOrderStatus(order.id, "CMS_VERIFIED", {
       cms: {
-        contractId: cms.contractId,
-        billingStatus: cms.billingStatus,
-        estimatedCost: cms.estimatedCost || 0,
+        contractId: cmsResult.contractId,
+        billingStatus: cmsResult.billingStatus,
+        estimatedCost: cmsResult.estimatedCost || 0,
       },
     });
 
@@ -204,55 +500,40 @@ app.post("/api/orders", async (req, res) => {
       orderId: order.id,
       timestamp: now(),
       data: {
-        ...cms,
+        ...cmsResult,
         status: "CONTRACT_VERIFIED",
         stage: "CMS_PROCESSING",
+        sagaStep: "COMPLETED",
+        progress: { completed: 1, total: 3 },
       },
     });
-    logger.debug(`Emitted CMS_VERIFIED event for order ${order.id}`);
 
-    // Step 2: WMS Package Registration (Proprietary TCP/IP messaging simulation)
-    logger.info(
-      `Step 2: Starting WMS package registration for order ${order.id}`
-    );
-    logger.info(
-      "Heterogeneous Integration - Using TCP/IP adapter for proprietary WMS",
-      {
-        systemType: "PROPRIETARY_ON_PREMISE",
-        protocol: "TCP/IP Binary Messaging",
-        challenge:
-          "Protocol translation from REST/JSON to TCP/IP binary format",
-      }
-    );
-
-    const wmsStartTime = Date.now();
-    const wms = await wmsAdapter.registerPackage(order);
-    const wmsDuration = Date.now() - wmsStartTime;
-
-    if (!wms.ok) {
-      logger.error(`WMS package registration failed for order ${order.id}`, {
-        response: wms,
-        duration: wmsDuration,
-        packages: order.packages.length,
-      });
-      throw new Error(
-        `WMS registration failed: ${wms.error || "Package registration error"}`
-      );
-    }
-
-    logger.info(`WMS package registration successful for order ${order.id}`, {
-      packageId: wms.packageId,
-      warehouseLocation: wms.warehouseLocation,
-      estimatedReadyTime: wms.estimatedReadyTime,
-      duration: wmsDuration,
+    // Step 2: WMS Package Registration with fault tolerance
+    await emitEvent(TOPIC, {
+      eventType: "WMS_REGISTRATION_STARTED",
+      orderId: order.id,
+      timestamp: now(),
+      data: { stage: "WMS_PROCESSING", step: 2, totalSteps: 3 },
     });
+
+    const wmsResult = await saga.executeStep(
+      "WMS_REGISTRATION",
+      async () => {
+        return await callServiceWithRetry(
+          "wms",
+          () => wmsAdapter.registerPackage(order),
+          order.id
+        );
+      },
+      () => compensationActions.wms(order.id)
+    );
 
     // Update order in database with WMS data
     await orderRepo.updateOrderStatus(order.id, "WMS_REGISTERED", {
       wms: {
-        packageId: wms.packageId,
-        warehouseLocation: wms.warehouseLocation,
-        estimatedReadyTime: wms.estimatedReadyTime,
+        packageId: wmsResult.packageId,
+        warehouseLocation: wmsResult.warehouseLocation,
+        estimatedReadyTime: wmsResult.estimatedReadyTime,
       },
     });
 
@@ -261,59 +542,43 @@ app.post("/api/orders", async (req, res) => {
       orderId: order.id,
       timestamp: now(),
       data: {
-        ...wms,
+        ...wmsResult,
         status: "PACKAGES_REGISTERED",
         stage: "WMS_PROCESSING",
+        sagaStep: "COMPLETED",
+        progress: { completed: 2, total: 3 },
       },
     });
-    logger.debug(`Emitted WMS_REGISTERED event for order ${order.id}`);
 
-    // Step 3: ROS Route Optimization (Modern RESTful API simulation)
-    logger.info(
-      `Step 3: Starting ROS route optimization for order ${order.id}`
-    );
-    logger.info(
-      "Heterogeneous Integration - Using REST/JSON adapter for cloud ROS",
-      {
-        systemType: "CLOUD_BASED_SAAS",
-        protocol: "REST/JSON over HTTPS",
-        challenge: "Cloud API integration with retry logic and error handling",
-      }
-    );
-
-    const rosStartTime = Date.now();
-    const ros = await rosAdapter.optimizeRoute(order);
-    const rosDuration = Date.now() - rosStartTime;
-
-    if (!ros.ok) {
-      logger.error(`ROS route optimization failed for order ${order.id}`, {
-        response: ros,
-        duration: rosDuration,
-        deliveryAddresses: order.deliveryAddresses.length,
-      });
-      throw new Error(
-        `ROS optimization failed: ${ros.error || "Route optimization error"}`
-      );
-    }
-
-    logger.info(`ROS route optimization successful for order ${order.id}`, {
-      routeId: ros.routeId,
-      etaMinutes: ros.etaMinutes,
-      driverId: ros.assignedDriver,
-      vehicleId: ros.assignedVehicle,
-      optimizedStops: ros.optimizedStops,
-      duration: rosDuration,
+    // Step 3: ROS Route Optimization with fault tolerance
+    await emitEvent(TOPIC, {
+      eventType: "ROS_OPTIMIZATION_STARTED",
+      orderId: order.id,
+      timestamp: now(),
+      data: { stage: "ROS_PROCESSING", step: 3, totalSteps: 3 },
     });
+
+    const rosResult = await saga.executeStep(
+      "ROS_OPTIMIZATION",
+      async () => {
+        return await callServiceWithRetry(
+          "ros",
+          () => rosAdapter.optimizeRoute(order),
+          order.id
+        );
+      },
+      () => compensationActions.ros(order.id)
+    );
 
     // Update order in database with ROS data
     await orderRepo.updateOrderStatus(order.id, "ROS_OPTIMIZED", {
       ros: {
-        routeId: ros.routeId,
-        assignedDriver: ros.assignedDriver,
-        assignedVehicle: ros.assignedVehicle,
-        optimizedStops: ros.optimizedStops,
-        estimatedDelivery: ros.estimatedDelivery,
-        etaMinutes: ros.etaMinutes,
+        routeId: rosResult.routeId,
+        assignedDriver: rosResult.assignedDriver,
+        assignedVehicle: rosResult.assignedVehicle,
+        optimizedStops: rosResult.optimizedStops,
+        estimatedDelivery: rosResult.estimatedDelivery,
+        etaMinutes: rosResult.etaMinutes,
       },
     });
 
@@ -322,12 +587,13 @@ app.post("/api/orders", async (req, res) => {
       orderId: order.id,
       timestamp: now(),
       data: {
-        ...ros,
+        ...rosResult,
         status: "ROUTE_OPTIMIZED",
         stage: "ROS_PROCESSING",
+        sagaStep: "COMPLETED",
+        progress: { completed: 3, total: 3 },
       },
     });
-    logger.debug(`Emitted ROS_OPTIMIZED event for order ${order.id}`);
 
     // Final completion event and database update
     await orderRepo.updateOrderStatus(order.id, "READY_FOR_DELIVERY");
@@ -340,65 +606,60 @@ app.post("/api/orders", async (req, res) => {
         ok: true,
         status: "READY_FOR_DELIVERY",
         stage: "PROCESSING_COMPLETE",
+        sagaCompleted: true,
+        completedSteps: saga.completedSteps,
+        progress: { completed: 3, total: 3 },
         manifest: {
-          contractId: cms.contractId,
-          packageId: wms.packageId,
-          routeId: ros.routeId,
-          assignedDriver: ros.assignedDriver,
-          estimatedDelivery: ros.estimatedDelivery,
+          contractId: cmsResult.contractId,
+          packageId: wmsResult.packageId,
+          routeId: rosResult.routeId,
+          assignedDriver: rosResult.assignedDriver,
+          estimatedDelivery: rosResult.estimatedDelivery,
         },
       },
     });
 
     const totalDuration = Date.now() - startTime;
     logger.info(
-      `Swift Logistics order processing completed successfully for order ${order.id}`,
+      `Background distributed transaction completed successfully for order ${order.id}`,
       {
         totalDuration,
-        cmsDuration,
-        wmsDuration,
-        rosDuration,
-        stages: [
-          "CMS_VERIFIED",
-          "WMS_REGISTERED",
-          "ROS_OPTIMIZED",
-          "READY_FOR_DELIVERY",
-        ],
-        assignedDriver: ros.assignedDriver,
-        estimatedDelivery: ros.estimatedDelivery,
-        protocolIntegration: {
-          cmsProtocol: "SOAP/XML",
-          wmsProtocol: "TCP/IP Binary",
-          rosProtocol: "REST/JSON HTTPS",
-          totalAdapterOverhead: `${cmsDuration + wmsDuration + rosDuration}ms`,
-        },
+        sagaSteps: saga.completedSteps,
+        serviceHealth: Object.keys(serviceHealth).map((service) => ({
+          service,
+          available: serviceHealth[service].available,
+          failures: serviceHealth[service].consecutiveFailures,
+        })),
+        faultTolerance: "ENABLED",
+        consistencyModel: "EVENTUAL_CONSISTENCY",
+        processingMode: "BACKGROUND_ASYNC",
       }
     );
-
-    res.json({
-      status: "success",
-      orderId: order.id,
-      message: "Order processed successfully and ready for delivery",
-      manifest: {
-        contractId: cms.contractId,
-        packageId: wms.packageId,
-        routeId: ros.routeId,
-        assignedDriver: ros.assignedDriver,
-        estimatedDelivery: ros.estimatedDelivery,
-      },
-    });
   } catch (err) {
     const totalDuration = Date.now() - startTime;
     logger.error(
-      `Swift Logistics order processing failed for order ${order.id}`,
+      `Background distributed transaction failed for order ${order.id}`,
       {
         error: err.message,
         duration: totalDuration,
         stack: err.stack,
         clientId: order.clientId,
         failureStage: err.stage || "UNKNOWN",
+        processingMode: "BACKGROUND_ASYNC",
+        serviceHealth: Object.keys(serviceHealth).map((service) => ({
+          service,
+          available: serviceHealth[service].available,
+          failures: serviceHealth[service].consecutiveFailures,
+        })),
       }
     );
+
+    // Update order status to failed
+    await orderRepo.updateOrderStatus(order.id, "FAILED", {
+      error: err.message,
+      failedAt: new Date().toISOString(),
+      canRetry: true,
+    });
 
     // Emit failure event for real-time tracking
     await emitEvent(TOPIC, {
@@ -409,19 +670,14 @@ app.post("/api/orders", async (req, res) => {
         error: err.message,
         status: "FAILED",
         stage: "ERROR_HANDLING",
-        requiresManualIntervention: true,
+        sagaCompensated: true,
+        requiresManualIntervention: false,
+        canRetryLater: true,
+        processingMode: "BACKGROUND_ASYNC",
       },
     });
-
-    res.status(500).json({
-      error: err.message,
-      orderId: order.id,
-      status: "failed",
-      message:
-        "Order processing failed. Please contact Swift Logistics support.",
-    });
   }
-});
+}
 
 // Get order details by ID
 app.get("/api/orders/:orderId", async (req, res) => {
@@ -510,8 +766,40 @@ app.get("/api/orders/:orderId/status", async (req, res) => {
     // Get order events to show processing steps
     const events = await orderRepo.getOrderEvents(orderId);
 
+    // Calculate processing progress
+    const totalSteps = 3; // CMS, WMS, ROS
+    let completedSteps = 0;
+    let currentStage = "QUEUED";
+    let estimatedCompletion = "2-5 minutes";
+
+    if (order.cms_verified_at) completedSteps++;
+    if (order.wms_registered_at) completedSteps++;
+    if (order.ros_optimized_at) completedSteps++;
+
+    // Determine current processing stage
+    if (order.ready_for_delivery_at) {
+      currentStage = "READY_FOR_DELIVERY";
+      estimatedCompletion = "COMPLETED";
+    } else if (order.ros_optimized_at) {
+      currentStage = "FINALIZING";
+      estimatedCompletion = "< 1 minute";
+    } else if (order.wms_registered_at) {
+      currentStage = "ROS_PROCESSING";
+      estimatedCompletion = "1-2 minutes";
+    } else if (order.cms_verified_at) {
+      currentStage = "WMS_PROCESSING";
+      estimatedCompletion = "1-3 minutes";
+    } else if (order.status === "PROCESSING") {
+      currentStage = "CMS_PROCESSING";
+      estimatedCompletion = "2-4 minutes";
+    }
+
+    const progressPercentage = Math.round((completedSteps / totalSteps) * 100);
+
     logger.info(`Order status retrieved for ${orderId}`, {
       status: order.status,
+      currentStage,
+      progress: `${completedSteps}/${totalSteps}`,
       eventsCount: events.length,
     });
 
@@ -520,24 +808,106 @@ app.get("/api/orders/:orderId/status", async (req, res) => {
       orderId: order.id,
       status: order.status,
       priority: order.priority,
-      steps: events.map((event) => ({
-        step: event.event_type,
-        status: "COMPLETED",
-        timestamp: event.created_at,
-        details: event.event_data,
-      })),
-      currentStage: {
-        cms: order.cms_verified_at ? "COMPLETED" : "PENDING",
-        wms: order.wms_registered_at ? "COMPLETED" : "PENDING",
-        ros: order.ros_optimized_at ? "COMPLETED" : "PENDING",
-        delivery: order.ready_for_delivery_at ? "READY" : "PENDING",
+
+      // Asynchronous processing information
+      processing: {
+        mode: "ASYNCHRONOUS",
+        currentStage,
+        progress: {
+          completed: completedSteps,
+          total: totalSteps,
+          percentage: progressPercentage,
+        },
+        estimatedCompletion,
+        distributedTransaction: {
+          sagaPattern: true,
+          faultTolerance: "enabled",
+          eventualConsistency: true,
+        },
       },
-      timestamps: {
-        submitted: order.submitted_at,
-        cmsVerified: order.cms_verified_at,
-        wmsRegistered: order.wms_registered_at,
-        rosOptimized: order.ros_optimized_at,
-        readyForDelivery: order.ready_for_delivery_at,
+
+      // Detailed step tracking
+      steps: [
+        {
+          step: "CMS_VERIFICATION",
+          name: "Contract Verification",
+          status: order.cms_verified_at
+            ? "COMPLETED"
+            : currentStage === "CMS_PROCESSING"
+            ? "IN_PROGRESS"
+            : "PENDING",
+          timestamp: order.cms_verified_at,
+          estimatedDuration: "30-90 seconds",
+        },
+        {
+          step: "WMS_REGISTRATION",
+          name: "Package Registration",
+          status: order.wms_registered_at
+            ? "COMPLETED"
+            : currentStage === "WMS_PROCESSING"
+            ? "IN_PROGRESS"
+            : "PENDING",
+          timestamp: order.wms_registered_at,
+          estimatedDuration: "45-120 seconds",
+        },
+        {
+          step: "ROS_OPTIMIZATION",
+          name: "Route Optimization",
+          status: order.ros_optimized_at
+            ? "COMPLETED"
+            : currentStage === "ROS_PROCESSING"
+            ? "IN_PROGRESS"
+            : "PENDING",
+          timestamp: order.ros_optimized_at,
+          estimatedDuration: "60-180 seconds",
+        },
+      ],
+
+      // Service-specific results (if available)
+      results: {
+        cms: order.cms_verified_at
+          ? {
+              contractId: order.contract_id,
+              billingStatus: order.billing_status,
+              estimatedCost: order.estimated_cost,
+              verifiedAt: order.cms_verified_at,
+            }
+          : null,
+
+        wms: order.wms_registered_at
+          ? {
+              packageId: order.warehouse_package_id,
+              warehouseLocation: order.warehouse_location,
+              registeredAt: order.wms_registered_at,
+            }
+          : null,
+
+        ros: order.ros_optimized_at
+          ? {
+              routeId: order.route_id,
+              assignedDriver: order.assigned_driver_id,
+              assignedVehicle: order.assigned_vehicle_id,
+              estimatedDelivery: order.estimated_delivery_time,
+              optimizedAt: order.ros_optimized_at,
+            }
+          : null,
+      },
+
+      // Real-time tracking
+      tracking: {
+        submittedAt: order.submitted_at,
+        lastUpdated: order.updated_at,
+        processingEvents: events.length,
+        realTimeUpdates: "available",
+        webhookSupport: "enabled",
+      },
+
+      // Actions available to client
+      actions: {
+        cancel: order.status === "PROCESSING" ? "available" : "not_available",
+        modify: "not_available_during_processing",
+        track: "real_time_available",
+        estimate: "dynamic_updates",
       },
     });
   } catch (err) {
@@ -591,7 +961,72 @@ app.get("/api/orders", async (req, res) => {
 
 app.get("/health", (_, res) => {
   logger.debug("Health check endpoint called");
-  res.json({ status: "ok" });
+  res.json({
+    status: "ok",
+    distributedTransactions: "enabled",
+    serviceHealth: Object.keys(serviceHealth).map((service) => ({
+      service,
+      available: serviceHealth[service].available,
+      consecutiveFailures: serviceHealth[service].consecutiveFailures,
+      lastFailure: serviceHealth[service].lastFailure,
+    })),
+    faultTolerance: {
+      circuitBreakerThreshold: CIRCUIT_BREAKER_THRESHOLD,
+      circuitBreakerTimeout: CIRCUIT_BREAKER_TIMEOUT,
+      maxRetryAttempts: MAX_RETRY_ATTEMPTS,
+      retryDelay: RETRY_DELAY_MS,
+    },
+  });
+});
+
+// Service health monitoring endpoint
+app.get("/api/services/health", (_, res) => {
+  logger.debug("Service health monitoring endpoint called");
+
+  const healthSummary = {
+    overall: Object.values(serviceHealth).every((s) => s.available)
+      ? "healthy"
+      : "degraded",
+    services: Object.keys(serviceHealth).map((service) => {
+      const health = serviceHealth[service];
+      return {
+        service: service.toUpperCase(),
+        status: health.available ? "available" : "circuit_open",
+        consecutiveFailures: health.consecutiveFailures,
+        lastFailure: health.lastFailure,
+        nextRetryAllowed: health.lastFailure
+          ? new Date(health.lastFailure + CIRCUIT_BREAKER_TIMEOUT).toISOString()
+          : null,
+      };
+    }),
+    distributedTransactions: {
+      enabled: true,
+      sagaPattern: true,
+      eventualConsistency: true,
+      compensationActions: "configured",
+    },
+  };
+
+  res.json(healthSummary);
+});
+
+// Manual service recovery endpoint for testing
+app.post("/api/services/:service/recover", (req, res) => {
+  const { service } = req.params;
+
+  if (!serviceHealth[service]) {
+    return res.status(404).json({ error: "Service not found" });
+  }
+
+  recordServiceSuccess(service);
+
+  logger.info(`Manual service recovery triggered for ${service}`);
+
+  res.json({
+    message: `Service ${service} manually recovered`,
+    service: service,
+    newStatus: serviceHealth[service],
+  });
 });
 
 app.listen(PORT, async () => {
@@ -601,6 +1036,9 @@ app.listen(PORT, async () => {
     cmsUrl: CMS_URL,
     wmsUrl: WMS_URL,
     rosUrl: ROS_URL,
+    distributedTransactions: "ENABLED",
+    faultTolerance: "ENABLED",
+    consistencyModel: "EVENTUAL_CONSISTENCY",
   });
 
   try {
@@ -610,7 +1048,92 @@ app.listen(PORT, async () => {
     await startProducer();
     logger.info("Kafka producer started successfully");
 
-    logger.info(`Order Service is ready and listening on ${PORT}`);
+    // Start Kafka consumer for handling retry events and distributed transaction coordination
+    await startConsumer(TOPIC, async (message) => {
+      try {
+        const event = JSON.parse(message.value.toString());
+
+        // Handle distributed transaction start events
+        if (event.eventType === "DISTRIBUTED_TRANSACTION_START") {
+          logger.info(
+            `Starting background distributed transaction processing`,
+            {
+              orderId: event.orderId,
+              eventType: event.eventType,
+            }
+          );
+
+          // Process distributed transaction in background (non-blocking)
+          setImmediate(async () => {
+            try {
+              await processDistributedTransaction(event.data.order);
+            } catch (error) {
+              logger.error(`Background transaction processing failed`, {
+                orderId: event.orderId,
+                error: error.message,
+              });
+            }
+          });
+        }
+
+        // Handle retry events
+        if (event.eventType.includes("RETRY_SCHEDULED")) {
+          logger.info(`Processing retry event`, {
+            eventType: event.eventType,
+            orderId: event.orderId,
+            retryCount: event.data.retryCount,
+          });
+
+          // Retry logic would be implemented here
+          // For now, just log the retry attempt
+        }
+
+        // Handle service recovery events
+        if (event.eventType.includes("SERVICE_RECOVERED")) {
+          const serviceName = event.data.serviceName;
+          recordServiceSuccess(serviceName);
+          logger.info(`Service recovery processed`, {
+            service: serviceName,
+            orderId: event.orderId,
+          });
+        }
+
+        // Handle compensation events
+        if (event.eventType.includes("COMPENSATION")) {
+          logger.info(`Processing compensation event`, {
+            eventType: event.eventType,
+            orderId: event.orderId,
+          });
+        }
+
+        // Handle progress tracking events
+        if (
+          event.eventType.includes("_STARTED") ||
+          event.eventType.includes("_VERIFIED") ||
+          event.eventType.includes("_REGISTERED") ||
+          event.eventType.includes("_OPTIMIZED")
+        ) {
+          logger.info(`Order processing progress`, {
+            eventType: event.eventType,
+            orderId: event.orderId,
+            stage: event.data.stage,
+            progress: event.data.progress,
+          });
+        }
+      } catch (error) {
+        logger.error(`Error processing Kafka message`, {
+          error: error.message,
+          message: message.value.toString(),
+        });
+      }
+    });
+    logger.info(
+      "Kafka consumer started for distributed transaction coordination"
+    );
+
+    logger.info(
+      `Order Service is ready with distributed transaction support on ${PORT}`
+    );
   } catch (error) {
     logger.error("Failed to initialize Order Service", {
       error: error.message,

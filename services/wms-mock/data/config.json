@@ -1,0 +1,54 @@
+{
+  "system": {
+    "name": "Swift Logistics WMS",
+    "version": "3.2.1",
+    "protocol": "TCP/IP Proprietary",
+    "environment": "development",
+    "lastRestart": "2025-09-11T08:00:00Z"
+  },
+  "warehouse": {
+    "facility": "SWIFT_WAREHOUSE_CENTRAL",
+    "address": "1250 Industrial Blvd, Logistics Park, City",
+    "operatingHours": "24/7",
+    "timezone": "UTC-5",
+    "contactNumber": "+1-555-WMS-CTRL"
+  },
+  "operations": {
+    "pickingTimeBase": 5,
+    "pickingTimePerPackage": 3,
+    "weightFactorThreshold": 10,
+    "weightFactorMultiplier": 2,
+    "urgentOrderPriority": "HIGH",
+    "standardOrderPriority": "STANDARD"
+  },
+  "thresholds": {
+    "lowInventoryWarning": 10,
+    "criticalInventoryWarning": 5,
+    "overStockWarning": 90,
+    "zoneCapacityWarning": 85
+  },
+  "automation": {
+    "autoReorderEnabled": true,
+    "inventorySyncInterval": "12h",
+    "healthCheckInterval": "5m",
+    "backupInterval": "24h"
+  },
+  "integrations": {
+    "erp": {
+      "enabled": true,
+      "endpoint": "http://erp.swiftlogistics.com/api",
+      "syncFrequency": "1h"
+    },
+    "suppliers": {
+      "enabled": true,
+      "autoOrderEnabled": false,
+      "notificationEnabled": true
+    }
+  },
+  "security": {
+    "encryptionEnabled": true,
+    "auditLogging": true,
+    "accessControl": "RBAC",
+    "sessionTimeout": "8h"
+  }
+}

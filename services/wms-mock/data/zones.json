@@ -1,0 +1,128 @@
+{
+  "lastUpdated": "2025-09-11T10:00:00Z",
+  "version": "1.0.0",
+  "zones": {
+    "A1": {
+      "name": "Books & Media Zone",
+      "capacity": 1200,
+      "currentLoad": 850,
+      "manager": "Alice Johnson",
+      "operatingHours": "06:00-22:00",
+      "specialization": ["Books", "Media", "Educational"],
+      "equipment": ["Conveyor Belt", "Sorting Machine", "Scanner"],
+      "temperature": "ambient",
+      "humidity": "controlled"
+    },
+    "B1": {
+      "name": "Electronics Zone",
+      "capacity": 1000,
+      "currentLoad": 750,
+      "manager": "Bob Chen",
+      "operatingHours": "24/7",
+      "specialization": ["Electronics", "Technology", "Components"],
+      "equipment": [
+        "Anti-Static Workbench",
+        "ESD Protection",
+        "Testing Station"
+      ],
+      "temperature": "climate-controlled",
+      "humidity": "low"
+    },
+    "C1": {
+      "name": "Fashion & Apparel Zone",
+      "capacity": 1500,
+      "currentLoad": 1100,
+      "manager": "Carol Martinez",
+      "operatingHours": "05:00-23:00",
+      "specialization": ["Fashion", "Footwear", "Accessories"],
+      "equipment": ["Hanging Systems", "Size Sorter", "Steam Press"],
+      "temperature": "ambient",
+      "humidity": "controlled"
+    },
+    "D1": {
+      "name": "Beauty & Health Zone",
+      "capacity": 800,
+      "currentLoad": 580,
+      "manager": "David Kim",
+      "operatingHours": "06:00-22:00",
+      "specialization": ["Beauty", "Skincare", "Health", "Supplements"],
+      "equipment": ["Refrigerated Storage", "Batch Scanner", "Expiry Tracker"],
+      "temperature": "cool",
+      "humidity": "controlled"
+    },
+    "E1": {
+      "name": "Home & Garden Zone",
+      "capacity": 900,
+      "currentLoad": 650,
+      "manager": "Eva Thompson",
+      "operatingHours": "06:00-20:00",
+      "specialization": ["Home", "Garden", "Furniture", "Appliances"],
+      "equipment": ["Heavy Lift", "Pallet Jack", "Assembly Station"],
+      "temperature": "ambient",
+      "humidity": "standard"
+    },
+    "F1": {
+      "name": "Sports & Fitness Zone",
+      "capacity": 700,
+      "currentLoad": 420,
+      "manager": "Frank Wilson",
+      "operatingHours": "05:00-21:00",
+      "specialization": ["Sports", "Fitness", "Outdoor"],
+      "equipment": ["Weight Scale", "Size Checker", "Assembly Tools"],
+      "temperature": "ambient",
+      "humidity": "standard"
+    },
+    "G1": {
+      "name": "Food & Beverages Zone",
+      "capacity": 1100,
+      "currentLoad": 780,
+      "manager": "Grace Lee",
+      "operatingHours": "24/7",
+      "specialization": ["Food", "Beverages", "Perishables"],
+      "equipment": ["Cold Storage", "FIFO System", "Batch Tracker"],
+      "temperature": "refrigerated",
+      "humidity": "controlled"
+    },
+    "H1": {
+      "name": "Automotive Zone",
+      "capacity": 600,
+      "currentLoad": 320,
+      "manager": "Henry Davis",
+      "operatingHours": "07:00-19:00",
+      "specialization": ["Automotive", "Parts", "Fluids"],
+      "equipment": ["Chemical Storage", "Parts Organizer", "Safety Station"],
+      "temperature": "ambient",
+      "humidity": "low"
+    },
+    "I1": {
+      "name": "Toys & Games Zone",
+      "capacity": 750,
+      "currentLoad": 480,
+      "manager": "Iris Brown",
+      "operatingHours": "06:00-22:00",
+      "specialization": ["Toys", "Games", "Educational"],
+      "equipment": ["Safety Scanner", "Age Sorter", "Quality Check"],
+      "temperature": "ambient",
+      "humidity": "controlled"
+    },
+    "J1": {
+      "name": "Office Supplies Zone",
+      "capacity": 650,
+      "currentLoad": 390,
+      "manager": "Jack Miller",
+      "operatingHours": "06:00-20:00",
+      "specialization": ["Office", "Stationery", "Business"],
+      "equipment": ["Bulk Sorter", "Count Machine", "Packaging Station"],
+      "temperature": "ambient",
+      "humidity": "standard"
+    }
+  },
+  "metadata": {
+    "totalZones": 10,
+    "totalCapacity": 8750,
+    "totalCurrentLoad": 6350,
+    "utilizationRate": 72.6,
+    "operationalStatus": "ACTIVE",
+    "emergencyProtocols": "ENABLED"
+  }
+}

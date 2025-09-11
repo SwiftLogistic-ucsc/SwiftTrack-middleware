@@ -1,51 +1,100 @@
 import express from "express";
 import { getLogger } from "@swifttrack/logger";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const logger = getLogger("wms-mock");
 const app = express();
 app.use(express.json());
 
-// Mock warehouse inventory for Swift Logistics
-const inventory = {
-  "BOOK-001": {
-    available: 150,
-    reserved: 25,
-    location: "A1-B2-C3",
-    weight: 0.5,
-  },
-  "BOOK-002": {
-    available: 200,
-    reserved: 10,
-    location: "A2-C3-D1",
-    weight: 0.8,
-  },
-  "ELECTRONICS-001": {
-    available: 75,
-    reserved: 5,
-    location: "B1-A4-E2",
-    weight: 2.5,
-  },
-  "FASHION-001": {
-    available: 120,
-    reserved: 15,
-    location: "C1-B3-F1",
-    weight: 0.3,
-  },
-  "COSMETICS-001": {
-    available: 90,
-    reserved: 8,
-    location: "D1-C2-G3",
-    weight: 0.2,
-  },
-};
+// Load data from JSON files
+let inventoryData, warehouseZones, wmsConfig;
 
-// Mock warehouse zones
-const warehouseZones = {
-  A1: { name: "Electronics Zone", capacity: 1000, currentLoad: 750 },
-  B1: { name: "Books & Media", capacity: 800, currentLoad: 600 },
-  C1: { name: "Fashion & Apparel", capacity: 1200, currentLoad: 900 },
-  D1: { name: "Beauty & Health", capacity: 600, currentLoad: 400 },
-};
+try {
+  // Load inventory data
+  const inventoryPath = path.join(__dirname, "data", "inventory.json");
+  inventoryData = JSON.parse(fs.readFileSync(inventoryPath, "utf8"));
+
+  // Load warehouse zones
+  const zonesPath = path.join(__dirname, "data", "zones.json");
+  const zonesData = JSON.parse(fs.readFileSync(zonesPath, "utf8"));
+  warehouseZones = zonesData.zones;
+
+  // Load WMS configuration
+  const configPath = path.join(__dirname, "data", "config.json");
+  wmsConfig = JSON.parse(fs.readFileSync(configPath, "utf8"));
+
+  logger.info("WMS Mock Service - Data files loaded successfully", {
+    inventoryItems: Object.keys(inventoryData.items).length,
+    warehouseZones: Object.keys(warehouseZones).length,
+    configVersion: wmsConfig.system.version,
+  });
+} catch (error) {
+  logger.error("Failed to load WMS data files", { error: error.message });
+  process.exit(1);
+}
+
+// Dynamic inventory reference (for runtime modifications)
+const inventory = inventoryData.items;
+
+// Utility functions for data persistence
+function saveInventoryData() {
+  try {
+    inventoryData.lastUpdated = new Date().toISOString();
+    const inventoryPath = path.join(__dirname, "data", "inventory.json");
+    fs.writeFileSync(inventoryPath, JSON.stringify(inventoryData, null, 2));
+    logger.debug("Inventory data saved to file");
+    return true;
+  } catch (error) {
+    logger.error("Failed to save inventory data", { error: error.message });
+    return false;
+  }
+}
+
+function saveZonesData() {
+  try {
+    const zonesData = {
+      lastUpdated: new Date().toISOString(),
+      version: "1.0.0",
+      zones: warehouseZones,
+      metadata: {
+        totalZones: Object.keys(warehouseZones).length,
+        totalCapacity: Object.values(warehouseZones).reduce(
+          (sum, zone) => sum + zone.capacity,
+          0
+        ),
+        totalCurrentLoad: Object.values(warehouseZones).reduce(
+          (sum, zone) => sum + zone.currentLoad,
+          0
+        ),
+        utilizationRate: Math.round(
+          (Object.values(warehouseZones).reduce(
+            (sum, zone) => sum + zone.currentLoad,
+            0
+          ) /
+            Object.values(warehouseZones).reduce(
+              (sum, zone) => sum + zone.capacity,
+              0
+            )) *
+            100
+        ),
+        operationalStatus: "ACTIVE",
+        emergencyProtocols: "ENABLED",
+      },
+    };
+    const zonesPath = path.join(__dirname, "data", "zones.json");
+    fs.writeFileSync(zonesPath, JSON.stringify(zonesData, null, 2));
+    logger.debug("Zones data saved to file");
+    return true;
+  } catch (error) {
+    logger.error("Failed to save zones data", { error: error.message });
+    return false;
+  }
+}
 
 // Request logging middleware
 app.use((req, res, next) => {
@@ -115,6 +164,8 @@ app.post("/register", async (req, res) => {
       reserved: 0,
       location: "UNKNOWN",
       weight: 1.0,
+      category: "UNKNOWN",
+      description: "Unknown Product",
     };
     const requestedQty = pkg.quantity || 1;
     const isAvailable = stock.available >= requestedQty;
@@ -128,7 +179,8 @@ app.post("/register", async (req, res) => {
 
     packageDetails.push({
       sku: pkg.sku,
-      description: pkg.description || `Product ${pkg.sku}`,
+      description: stock.description || pkg.description || `Product ${pkg.sku}`,
+      category: stock.category,
       requestedQty,
       availableQty: stock.available,
       reservedQty: stock.reserved,
@@ -223,9 +275,15 @@ app.post("/register", async (req, res) => {
 
 // Calculate picking time based on package count and weight
 function calculatePickingTime(packageCount, totalWeight) {
-  const baseTime = 5; // 5 minutes base time
-  const timePerPackage = 3; // 3 minutes per package
-  const weightFactor = totalWeight > 10 ? Math.ceil(totalWeight / 10) * 2 : 0; // Extra time for heavy items
+  const baseTime = wmsConfig.operations.pickingTimeBase;
+  const timePerPackage = wmsConfig.operations.pickingTimePerPackage;
+  const weightThreshold = wmsConfig.operations.weightFactorThreshold;
+  const weightMultiplier = wmsConfig.operations.weightFactorMultiplier;
+
+  const weightFactor =
+    totalWeight > weightThreshold
+      ? Math.ceil(totalWeight / weightThreshold) * weightMultiplier
+      : 0;
 
   return baseTime + packageCount * timePerPackage + weightFactor;
 }
@@ -259,6 +317,80 @@ app.get("/inventory/:sku?", (req, res) => {
       ),
     });
   }
+});
+
+// Get inventory by category
+app.get("/inventory/category/:category", (req, res) => {
+  const { category } = req.params;
+
+  logger.debug(`WMS Inventory category query`, { category });
+
+  const categoryItems = Object.entries(inventory)
+    .filter(
+      ([sku, item]) => item.category?.toLowerCase() === category.toLowerCase()
+    )
+    .reduce((acc, [sku, item]) => {
+      acc[sku] = item;
+      return acc;
+    }, {});
+
+  if (Object.keys(categoryItems).length === 0) {
+    return res.status(404).json({
+      error: `No items found in category: ${category}`,
+      availableCategories: [
+        ...new Set(Object.values(inventory).map((item) => item.category)),
+      ],
+    });
+  }
+
+  res.json({
+    category,
+    items: categoryItems,
+    itemCount: Object.keys(categoryItems).length,
+    totalAvailable: Object.values(categoryItems).reduce(
+      (sum, item) => sum + item.available,
+      0
+    ),
+    totalReserved: Object.values(categoryItems).reduce(
+      (sum, item) => sum + item.reserved,
+      0
+    ),
+  });
+});
+
+// Get all available categories
+app.get("/categories", (req, res) => {
+  logger.debug("WMS Categories query");
+
+  const categories = [
+    ...new Set(Object.values(inventory).map((item) => item.category)),
+  ];
+  const categoryStats = categories.map((category) => {
+    const categoryItems = Object.values(inventory).filter(
+      (item) => item.category === category
+    );
+    return {
+      name: category,
+      itemCount: categoryItems.length,
+      totalAvailable: categoryItems.reduce(
+        (sum, item) => sum + item.available,
+        0
+      ),
+      totalReserved: categoryItems.reduce(
+        (sum, item) => sum + item.reserved,
+        0
+      ),
+      totalWeight: categoryItems.reduce(
+        (sum, item) => sum + item.weight * (item.available + item.reserved),
+        0
+      ),
+    };
+  });
+
+  res.json({
+    categories: categoryStats,
+    totalCategories: categories.length,
+  });
 });
 
 // Warehouse zones status
@@ -336,21 +468,164 @@ app.get("/status", (req, res) => {
   });
 });
 
+// WMS Configuration endpoint
+app.get("/config", (req, res) => {
+  logger.debug("WMS Configuration query");
+  res.json({
+    system: wmsConfig.system,
+    warehouse: wmsConfig.warehouse,
+    operations: wmsConfig.operations,
+    thresholds: wmsConfig.thresholds,
+    dataFiles: {
+      inventoryVersion: inventoryData.version,
+      inventoryLastUpdated: inventoryData.lastUpdated,
+      totalItems: Object.keys(inventory).length,
+    },
+  });
+});
+
+// Data management endpoints
+app.post("/admin/save-data", (req, res) => {
+  logger.info("Manual data save requested");
+
+  const inventorySaved = saveInventoryData();
+  const zonesSaved = saveZonesData();
+
+  if (inventorySaved && zonesSaved) {
+    res.json({
+      success: true,
+      message: "All data saved successfully",
+      timestamp: new Date().toISOString(),
+    });
+  } else {
+    res.status(500).json({
+      success: false,
+      message: "Failed to save some data files",
+      inventorySaved,
+      zonesSaved,
+    });
+  }
+});
+
+// Inventory management endpoints
+app.put("/admin/inventory/:sku", (req, res) => {
+  const { sku } = req.params;
+  const updates = req.body;
+
+  logger.info(`Updating inventory for SKU: ${sku}`, updates);
+
+  if (!inventory[sku]) {
+    return res.status(404).json({
+      error: "SKU not found",
+      sku,
+    });
+  }
+
+  // Update inventory item
+  Object.assign(inventory[sku], updates);
+
+  // Save to file
+  const saved = saveInventoryData();
+
+  res.json({
+    success: saved,
+    message: saved
+      ? "Inventory updated successfully"
+      : "Failed to save inventory",
+    sku,
+    updatedItem: inventory[sku],
+  });
+});
+
+// Add new inventory item
+app.post("/admin/inventory", (req, res) => {
+  const { sku, itemData } = req.body;
+
+  logger.info(`Adding new inventory item: ${sku}`, itemData);
+
+  if (inventory[sku]) {
+    return res.status(409).json({
+      error: "SKU already exists",
+      sku,
+    });
+  }
+
+  // Add new item
+  inventory[sku] = itemData;
+
+  // Save to file
+  const saved = saveInventoryData();
+
+  res.json({
+    success: saved,
+    message: saved
+      ? "Inventory item added successfully"
+      : "Failed to save inventory",
+    sku,
+    newItem: inventory[sku],
+  });
+});
+
+// Get low stock alerts
+app.get("/alerts/low-stock", (req, res) => {
+  logger.debug("Low stock alerts query");
+
+  const lowStockItems = Object.entries(inventory)
+    .filter(([sku, item]) => {
+      const threshold =
+        item.reorderLevel || wmsConfig.thresholds.lowInventoryWarning;
+      return item.available <= threshold;
+    })
+    .map(([sku, item]) => ({
+      sku,
+      available: item.available,
+      reorderLevel:
+        item.reorderLevel || wmsConfig.thresholds.lowInventoryWarning,
+      category: item.category,
+      description: item.description,
+      supplier: item.supplier,
+      urgency:
+        item.available <= wmsConfig.thresholds.criticalInventoryWarning
+          ? "CRITICAL"
+          : "LOW",
+    }));
+
+  res.json({
+    alerts: lowStockItems,
+    totalAlerts: lowStockItems.length,
+    criticalAlerts: lowStockItems.filter((item) => item.urgency === "CRITICAL")
+      .length,
+    timestamp: new Date().toISOString(),
+  });
+});
+
 app.listen(5002, () => {
   logger.info("Swift Logistics WMS Proprietary Mock Service started", {
     port: 5002,
-    protocol: "TCP/IP Proprietary (simulated as REST)",
+    protocol: wmsConfig.system.protocol,
+    dataSource: "JSON Files",
     endpoints: [
       "/register",
       "/inventory",
+      "/inventory/category/:category",
+      "/categories",
       "/zones",
       "/track",
       "/health",
       "/status",
+      "/config",
+      "/admin/save-data",
+      "/admin/inventory",
+      "/alerts/low-stock",
     ],
-    inventoryItems: Object.keys(inventory).length,
-    warehouseZones: Object.keys(warehouseZones).length,
+    dataFiles: {
+      inventoryItems: Object.keys(inventory).length,
+      warehouseZones: Object.keys(warehouseZones).length,
+      inventoryVersion: inventoryData.version,
+      lastUpdated: inventoryData.lastUpdated,
+    },
     environment: process.env.NODE_ENV || "development",
-    systemVersion: "WMS_v3.2.1",
+    systemVersion: wmsConfig.system.version,
+    facility: wmsConfig.warehouse.facility,
   });
 });

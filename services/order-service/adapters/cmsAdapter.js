@@ -163,14 +163,99 @@ export class CMSAdapter {
     } catch (error) {
       const duration = Date.now() - startTime;
 
-      console.error("CMS Adapter - SOAP/XML protocol translation failed", {
+      // Extract detailed error information
+      let detailedError = {
+        service: "CMS",
         orderId: order.id,
-        error: error.message,
         duration,
         protocolIssue: "SOAP/XML communication failure",
-      });
+        originalError: error.message,
+        errorType: "UNKNOWN",
+        errorDetails: {},
+        suggestedAction: "Contact system administrator",
+      };
 
-      throw new Error(`CMS SOAP Adapter failed: ${error.message}`);
+      // Parse specific error types from CMS response
+      if (error.response && error.response.data) {
+        const errorData = error.response.data;
+
+        if (errorData.error && errorData.error.includes("Contract not found")) {
+          detailedError.errorType = "CONTRACT_NOT_FOUND";
+          detailedError.errorDetails = {
+            reason: "No valid contract found for client",
+            clientId: order.clientId,
+            contractStatus: errorData.contractStatus || "NOT_FOUND",
+            availableContracts: errorData.availableContracts || [],
+          };
+          detailedError.suggestedAction =
+            "Verify client has active contract or create new contract";
+        } else if (
+          errorData.error &&
+          errorData.error.includes("Credit limit exceeded")
+        ) {
+          detailedError.errorType = "CREDIT_LIMIT_EXCEEDED";
+          detailedError.errorDetails = {
+            reason: "Client has exceeded credit limit",
+            currentCredit: errorData.currentCredit || "Unknown",
+            creditLimit: errorData.creditLimit || "Unknown",
+            outstandingAmount: errorData.outstandingAmount || "Unknown",
+            estimatedOrderCost: errorData.estimatedCost || "Unknown",
+          };
+          detailedError.suggestedAction =
+            "Process payment or request credit limit increase";
+        } else if (
+          errorData.error &&
+          errorData.error.includes("Client suspended")
+        ) {
+          detailedError.errorType = "CLIENT_SUSPENDED";
+          detailedError.errorDetails = {
+            reason: "Client account is suspended",
+            suspensionReason: errorData.suspensionReason || "Payment overdue",
+            suspendedDate: errorData.suspendedDate || "Unknown",
+            reactivationRequirements: errorData.reactivationRequirements || [],
+          };
+          detailedError.suggestedAction =
+            "Contact accounts department to reactivate client";
+        }
+      } else if (error.message.includes("401")) {
+        detailedError.errorType = "AUTHENTICATION_FAILED";
+        detailedError.errorDetails = {
+          reason: "CMS authentication failed",
+          statusCode: 401,
+          authMethod: "SOAP Security Token",
+        };
+        detailedError.suggestedAction = "Check CMS authentication credentials";
+      } else if (
+        error.message.includes("timeout") ||
+        error.message.includes("ECONNREFUSED")
+      ) {
+        detailedError.errorType = "CONNECTION_FAILURE";
+        detailedError.errorDetails = {
+          reason: "CMS service is temporarily unavailable",
+          connectionAttempts: 1,
+          lastAttempt: new Date().toISOString(),
+        };
+        detailedError.suggestedAction =
+          "Service will retry automatically. Check CMS service health if issue persists";
+      }
+
+      console.error(
+        "CMS Adapter - SOAP/XML protocol translation failed",
+        detailedError
+      );
+
+      // Create enhanced error message
+      const enhancedError = new Error(
+        `CMS Service Error [${detailedError.errorType}]: ${
+          detailedError.errorDetails.reason || error.message
+        }`
+      );
+      enhancedError.serviceError = detailedError;
+      enhancedError.errorType = detailedError.errorType;
+      enhancedError.suggestedAction = detailedError.suggestedAction;
+      enhancedError.clientId = order.clientId;
+
+      throw enhancedError;
     }
   }
 }

@@ -324,30 +324,121 @@ export class ROSAdapter {
     } catch (error) {
       const duration = Date.now() - startTime;
 
-      // Better error message extraction
-      let errorMessage = "Unknown error";
-      if (error.message) {
-        errorMessage = error.message;
-      } else if (error.response?.data?.message) {
-        errorMessage = error.response.data.message;
-      } else if (error.response?.statusText) {
-        errorMessage = `HTTP ${error.response.status}: ${error.response.statusText}`;
-      } else if (error.code) {
-        errorMessage = `Network error: ${error.code}`;
+      // Extract detailed error information
+      let detailedError = {
+        service: "ROS",
+        orderId: order.id,
+        duration,
+        protocolIssue: "Cloud REST/JSON communication failure",
+        originalError: error.message,
+        errorType: "UNKNOWN",
+        errorDetails: {},
+        suggestedAction: "Contact system administrator",
+      };
+
+      // Parse specific error types from ROS response
+      if (error.response && error.response.data) {
+        const errorData = error.response.data;
+
+        if (
+          errorData.error &&
+          errorData.error.includes("No drivers available")
+        ) {
+          detailedError.errorType = "NO_DRIVERS_AVAILABLE";
+          detailedError.errorDetails = {
+            reason: "No drivers available for the requested route",
+            requestedRegion: errorData.region || "Unknown",
+            availableDrivers: errorData.availableDrivers || 0,
+            nextAvailableSlot: errorData.nextAvailableSlot || "Unknown",
+            estimatedWaitTime: errorData.estimatedWaitTime || "Unknown",
+          };
+          detailedError.suggestedAction =
+            "Schedule delivery for later time or use priority routing";
+        } else if (
+          errorData.error &&
+          errorData.error.includes("Route optimization failed")
+        ) {
+          detailedError.errorType = "ROUTE_OPTIMIZATION_FAILED";
+          detailedError.errorDetails = {
+            reason: "Unable to optimize route for delivery addresses",
+            problematicAddresses:
+              errorData.problematicAddresses || order.deliveryAddresses,
+            optimizationAttempts: errorData.attempts || 1,
+            alternativeRoutes: errorData.alternativeRoutes || [],
+          };
+          detailedError.suggestedAction =
+            "Verify delivery addresses or split into multiple deliveries";
+        } else if (
+          errorData.error &&
+          errorData.error.includes("Vehicle capacity exceeded")
+        ) {
+          detailedError.errorType = "VEHICLE_CAPACITY_EXCEEDED";
+          detailedError.errorDetails = {
+            reason: "Order exceeds available vehicle capacity",
+            requestedCapacity: errorData.requestedCapacity || "Unknown",
+            availableCapacity: errorData.availableCapacity || "Unknown",
+            packageCount: order.packages.length,
+            suggestedVehicleType:
+              errorData.suggestedVehicleType || "Large truck",
+          };
+          detailedError.suggestedAction =
+            "Split order into multiple deliveries or use larger vehicle";
+        } else if (
+          errorData.error &&
+          errorData.error.includes("Delivery zone restricted")
+        ) {
+          detailedError.errorType = "RESTRICTED_DELIVERY_ZONE";
+          detailedError.errorDetails = {
+            reason: "Delivery address is in restricted zone",
+            restrictedAddresses:
+              errorData.restrictedAddresses || order.deliveryAddresses,
+            restrictionType: errorData.restrictionType || "Unknown",
+            alternativeOptions: errorData.alternativeOptions || [],
+          };
+          detailedError.suggestedAction =
+            "Use alternative delivery address or special delivery service";
+        }
+      } else if (error.message.includes("503")) {
+        detailedError.errorType = "SERVICE_OVERLOADED";
+        detailedError.errorDetails = {
+          reason: "ROS service is temporarily overloaded",
+          statusCode: 503,
+          retryAfter: error.response?.headers?.["retry-after"] || "60 seconds",
+        };
+        detailedError.suggestedAction =
+          "Service will retry automatically during off-peak hours";
+      } else if (
+        error.message.includes("timeout") ||
+        error.message.includes("ECONNREFUSED")
+      ) {
+        detailedError.errorType = "CONNECTION_FAILURE";
+        detailedError.errorDetails = {
+          reason: "ROS cloud service is temporarily unavailable",
+          connectionAttempts: 1,
+          lastAttempt: new Date().toISOString(),
+          cloudProvider: "AWS",
+        };
+        detailedError.suggestedAction =
+          "Service will retry automatically. Check ROS cloud service health if issue persists";
       }
 
-      console.error("ROS Adapter - Cloud REST/JSON communication failed", {
-        orderId: order.id,
-        error: errorMessage,
-        fullError: error.toString(),
-        duration,
-        protocolIssue: "Cloud API communication failure",
-        httpStatus: error.response?.status,
-        cloudProvider: "AWS",
-        stack: error.stack,
-      });
+      console.error(
+        "ROS Adapter - Cloud REST/JSON communication failed",
+        detailedError
+      );
 
-      throw new Error(`ROS Cloud Adapter failed: ${errorMessage}`);
+      // Create enhanced error message
+      const enhancedError = new Error(
+        `ROS Service Error [${detailedError.errorType}]: ${
+          detailedError.errorDetails.reason || error.message
+        }`
+      );
+      enhancedError.serviceError = detailedError;
+      enhancedError.errorType = detailedError.errorType;
+      enhancedError.suggestedAction = detailedError.suggestedAction;
+      enhancedError.deliveryAddresses = order.deliveryAddresses;
+
+      throw enhancedError;
     }
   }
 }

@@ -156,15 +156,23 @@ async function callServiceWithRetry(
   } catch (error) {
     recordServiceFailure(serviceName);
 
-    logger.warn(`Service call failed for ${serviceName}`, {
+    // Extract enhanced error details if available
+    const errorDetails = {
       orderId,
-      error: error.message,
+      serviceName,
       retryCount,
       maxRetries: MAX_RETRY_ATTEMPTS,
-    });
+      errorType: error.errorType || "UNKNOWN",
+      serviceError: error.serviceError || null,
+      suggestedAction: error.suggestedAction || "Contact system administrator",
+      originalMessage: error.message,
+      timestamp: new Date().toISOString(),
+    };
+
+    logger.warn(`Service call failed for ${serviceName}`, errorDetails);
 
     if (retryCount < MAX_RETRY_ATTEMPTS) {
-      // Schedule retry via Kafka event
+      // Enhanced retry event with detailed error info
       await emitEvent(TOPIC, {
         eventType: `${serviceName.toUpperCase()}_RETRY_SCHEDULED`,
         orderId,
@@ -176,6 +184,10 @@ async function callServiceWithRetry(
             Date.now() + RETRY_DELAY_MS * Math.pow(2, retryCount)
           ).toISOString(),
           error: error.message,
+          errorType: error.errorType,
+          errorDetails: error.serviceError?.errorDetails || {},
+          suggestedAction: error.suggestedAction,
+          retryReason: "Automatic retry due to service failure",
         },
       });
 
@@ -190,12 +202,136 @@ async function callServiceWithRetry(
         retryCount + 1
       );
     } else {
-      // Max retries exceeded - will be handled by saga compensation
-      throw new Error(
-        `${serviceName} service failed after ${MAX_RETRY_ATTEMPTS} attempts: ${error.message}`
+      // Max retries exceeded - create enhanced error for saga compensation
+      const enhancedErrorMessage = createEnhancedErrorMessage(
+        serviceName,
+        error,
+        retryCount
       );
+      const finalError = new Error(enhancedErrorMessage);
+
+      // Preserve error details for compensation and user display
+      finalError.serviceError = error.serviceError;
+      finalError.errorType = error.errorType;
+      finalError.suggestedAction = error.suggestedAction;
+      finalError.serviceName = serviceName;
+      finalError.orderId = orderId;
+      finalError.retryAttempts = retryCount + 1;
+
+      throw finalError;
     }
   }
+}
+
+// Create user-friendly error message from technical error
+function createUserFriendlyErrorMessage(error) {
+  if (!error) return "An unexpected error occurred. Please try again.";
+
+  // If we have an enhanced error message from createEnhancedErrorMessage, use it
+  if (error.enhancedErrorMessage) {
+    return error.enhancedErrorMessage;
+  }
+
+  // If we have error type and suggested action, format them nicely
+  if (error.errorType && error.suggestedAction) {
+    const serviceError = error.serviceError?.errorDetails || {};
+    const details =
+      Object.keys(serviceError).length > 0
+        ? ` (${Object.entries(serviceError)
+            .map(([k, v]) => `${k}: ${v}`)
+            .join(", ")})`
+        : "";
+
+    return `${error.errorType
+      .replace(/_/g, " ")
+      .toLowerCase()
+      .replace(/^\w/, (c) => c.toUpperCase())}${details}. ${
+      error.suggestedAction
+    }`;
+  }
+
+  // Fallback to basic error message
+  return error.message || "An unexpected error occurred. Please try again.";
+}
+
+// Create user-friendly error messages
+function createEnhancedErrorMessage(serviceName, error, retryCount) {
+  const attempts = retryCount + 1;
+
+  if (error.serviceError && error.serviceError.errorType !== "UNKNOWN") {
+    const serviceDetails = error.serviceError.errorDetails;
+
+    switch (error.serviceError.errorType) {
+      case "INVENTORY_SHORTAGE":
+        return `WMS Inventory Error: Insufficient inventory for ${
+          serviceDetails.affectedSKUs?.join(", ") || "requested items"
+        }. ${
+          serviceDetails.estimatedRestockTime !== "Unknown"
+            ? `Expected restock: ${serviceDetails.estimatedRestockTime}`
+            : "Contact warehouse for availability."
+        }`;
+
+      case "INVALID_SKU":
+        return `WMS Catalog Error: SKU(s) not found: ${
+          serviceDetails.invalidSKUs?.join(", ") || "unknown"
+        }. Please verify product codes in system catalog.`;
+
+      case "CAPACITY_EXCEEDED":
+        return `WMS Capacity Error: Warehouse capacity exceeded. Available space: ${
+          serviceDetails.availableSpace || "limited"
+        }. Consider splitting shipment or scheduling later.`;
+
+      case "CONTRACT_NOT_FOUND":
+        return `CMS Contract Error: No active contract found for client ${
+          serviceDetails.clientId || "unknown"
+        }. Client must have valid service contract to proceed.`;
+
+      case "CREDIT_LIMIT_EXCEEDED":
+        return `CMS Credit Error: Client credit limit exceeded. Current outstanding: ${
+          serviceDetails.outstandingAmount || "unknown"
+        }, Credit limit: ${
+          serviceDetails.creditLimit || "unknown"
+        }. Payment required to proceed.`;
+
+      case "CLIENT_SUSPENDED":
+        return `CMS Account Error: Client account suspended due to ${
+          serviceDetails.suspensionReason || "payment issues"
+        }. Contact accounts department for reactivation.`;
+
+      case "NO_DRIVERS_AVAILABLE":
+        return `ROS Scheduling Error: No drivers available in ${
+          serviceDetails.requestedRegion || "requested area"
+        }. Next available slot: ${
+          serviceDetails.nextAvailableSlot || "unknown"
+        }. Consider priority scheduling.`;
+
+      case "ROUTE_OPTIMIZATION_FAILED":
+        return `ROS Route Error: Cannot optimize route for delivery addresses. Problematic addresses: ${
+          serviceDetails.problematicAddresses?.join(", ") ||
+          "multiple locations"
+        }. Verify addresses or split delivery.`;
+
+      case "VEHICLE_CAPACITY_EXCEEDED":
+        return `ROS Capacity Error: Order exceeds vehicle capacity. Packages: ${
+          serviceDetails.packageCount
+        }, Suggested vehicle: ${
+          serviceDetails.suggestedVehicleType || "larger truck"
+        }. Consider splitting shipment.`;
+
+      case "RESTRICTED_DELIVERY_ZONE":
+        return `ROS Delivery Error: Delivery to restricted zone. Addresses: ${
+          serviceDetails.restrictedAddresses?.join(", ") || "undisclosed"
+        }. Use alternative address or special delivery service.`;
+
+      default:
+        return `${serviceName} Service Error: ${
+          error.serviceError.errorDetails.reason || error.message
+        } (${attempts} attempts)`;
+    }
+  }
+
+  // Fallback for generic errors
+  return `${serviceName} service failed after ${attempts} attempts: ${error.message}`;
 }
 
 // Saga pattern implementation for distributed transactions
@@ -637,31 +773,46 @@ async function processDistributedTransaction(order) {
     );
   } catch (err) {
     const totalDuration = Date.now() - startTime;
+
+    // Extract detailed error information for better user experience
+    const errorInfo = {
+      orderId: order.id,
+      error: err.message,
+      duration: totalDuration,
+      stack: err.stack,
+      clientId: order.clientId,
+      failureStage: err.serviceName || "UNKNOWN",
+      processingMode: "BACKGROUND_ASYNC",
+      serviceHealth: Object.keys(serviceHealth).map((service) => ({
+        service,
+        available: serviceHealth[service].available,
+        failures: serviceHealth[service].consecutiveFailures,
+      })),
+      enhancedErrorDetails: {
+        errorType: err.errorType || "UNKNOWN",
+        suggestedAction: err.suggestedAction || "Contact system administrator",
+        serviceError: err.serviceError || null,
+        retryAttempts: err.retryAttempts || 0,
+      },
+    };
+
     logger.error(
       `Background distributed transaction failed for order ${order.id}`,
-      {
-        error: err.message,
-        duration: totalDuration,
-        stack: err.stack,
-        clientId: order.clientId,
-        failureStage: err.stage || "UNKNOWN",
-        processingMode: "BACKGROUND_ASYNC",
-        serviceHealth: Object.keys(serviceHealth).map((service) => ({
-          service,
-          available: serviceHealth[service].available,
-          failures: serviceHealth[service].consecutiveFailures,
-        })),
-      }
+      errorInfo
     );
 
-    // Update order status to failed
+    // Update order status to failed with detailed error info
     await orderRepo.updateOrderStatus(order.id, "FAILED", {
       error: err.message,
+      errorType: err.errorType,
       failedAt: new Date().toISOString(),
       canRetry: true,
+      suggestedAction: err.suggestedAction,
+      serviceErrorDetails: err.serviceError,
+      retryAttempts: err.retryAttempts,
     });
 
-    // Emit failure event for real-time tracking
+    // Emit detailed failure event for real-time tracking
     await emitEvent(TOPIC, {
       eventType: "ORDER_FAILED",
       orderId: order.id,
@@ -674,6 +825,15 @@ async function processDistributedTransaction(order) {
         requiresManualIntervention: false,
         canRetryLater: true,
         processingMode: "BACKGROUND_ASYNC",
+        errorDetails: {
+          errorType: err.errorType || "UNKNOWN",
+          suggestedAction:
+            err.suggestedAction || "Contact system administrator",
+          failedService: err.serviceName || "UNKNOWN",
+          retryAttempts: err.retryAttempts || 0,
+          serviceSpecificDetails: err.serviceError?.errorDetails || {},
+          userFriendlyMessage: createUserFriendlyErrorMessage(err),
+        },
       },
     });
   }

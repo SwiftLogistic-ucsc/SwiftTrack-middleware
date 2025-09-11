@@ -214,17 +214,109 @@ export class WMSAdapter {
     } catch (error) {
       const duration = Date.now() - startTime;
 
-      console.error("WMS Adapter - TCP/IP protocol translation failed", {
+      // Extract detailed error information
+      let detailedError = {
+        service: "WMS",
         orderId: order.id,
-        error: error.message,
         duration,
         protocolIssue: "TCP/IP communication failure",
-      });
+        originalError: error.message,
+        errorType: "UNKNOWN",
+        errorDetails: {},
+        suggestedAction: "Contact system administrator",
+      };
+
+      // Parse specific error types from WMS response
+      if (error.response && error.response.data) {
+        const errorData = error.response.data;
+
+        if (
+          errorData.error &&
+          errorData.error.includes("Insufficient inventory")
+        ) {
+          detailedError.errorType = "INVENTORY_SHORTAGE";
+          detailedError.errorDetails = {
+            reason: "Insufficient inventory for requested items",
+            affectedSKUs: order.packages.map((pkg) => pkg.sku),
+            warehouseStatus: "INVENTORY_LOW",
+            estimatedRestockTime: errorData.estimatedRestock || "Unknown",
+          };
+          detailedError.suggestedAction =
+            "Check inventory levels or adjust quantities";
+        } else if (
+          errorData.error &&
+          errorData.error.includes("SKU not found")
+        ) {
+          detailedError.errorType = "INVALID_SKU";
+          detailedError.errorDetails = {
+            reason: "One or more SKUs are not found in warehouse system",
+            invalidSKUs:
+              errorData.invalidSKUs || order.packages.map((pkg) => pkg.sku),
+            validSKUs: errorData.validSKUs || [],
+          };
+          detailedError.suggestedAction =
+            "Verify SKU codes or update product catalog";
+        } else if (
+          errorData.error &&
+          errorData.error.includes("Warehouse capacity")
+        ) {
+          detailedError.errorType = "CAPACITY_EXCEEDED";
+          detailedError.errorDetails = {
+            reason: "Warehouse capacity exceeded",
+            currentCapacity: errorData.currentCapacity || "Unknown",
+            requestedSpace: errorData.requestedSpace || "Unknown",
+            availableSpace: errorData.availableSpace || "Unknown",
+          };
+          detailedError.suggestedAction =
+            "Schedule delivery for later or use alternate warehouse";
+        }
+      } else if (error.message.includes("409")) {
+        detailedError.errorType = "BUSINESS_RULE_VIOLATION";
+        detailedError.errorDetails = {
+          reason: "Business rule validation failed",
+          statusCode: 409,
+          possibleCauses: [
+            "Insufficient inventory for requested quantities",
+            "SKU not available in selected warehouse",
+            "Delivery constraints not met",
+          ],
+        };
+        detailedError.suggestedAction =
+          "Review order details and inventory availability";
+      } else if (
+        error.message.includes("timeout") ||
+        error.message.includes("ECONNREFUSED")
+      ) {
+        detailedError.errorType = "CONNECTION_FAILURE";
+        detailedError.errorDetails = {
+          reason: "WMS service is temporarily unavailable",
+          connectionAttempts: 1,
+          lastAttempt: new Date().toISOString(),
+        };
+        detailedError.suggestedAction =
+          "Service will retry automatically. Check WMS service health if issue persists";
+      }
+
+      console.error(
+        "WMS Adapter - TCP/IP protocol translation failed",
+        detailedError
+      );
 
       // Ensure connection is closed on error
       await this.closeTcpConnection();
 
-      throw new Error(`WMS TCP Adapter failed: ${error.message}`);
+      // Create enhanced error message
+      const enhancedError = new Error(
+        `WMS Service Error [${detailedError.errorType}]: ${
+          detailedError.errorDetails.reason || error.message
+        }`
+      );
+      enhancedError.serviceError = detailedError;
+      enhancedError.errorType = detailedError.errorType;
+      enhancedError.suggestedAction = detailedError.suggestedAction;
+      enhancedError.affectedSKUs = detailedError.errorDetails.affectedSKUs;
+
+      throw enhancedError;
     }
   }
 }

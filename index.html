@@ -11,332 +11,675 @@
         background: #f5f5f5;
       }
       .container {
-        max-width: 800px;
+        max-width: 1200px;
         margin: 0 auto;
         background: white;
-        padding: 20px;
         border-radius: 8px;
         box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        overflow: hidden;
       }
-      h2 {
+      .header {
+        background: linear-gradient(135deg, #3498db, #2c3e50);
+        color: white;
+        padding: 20px;
+        text-align: center;
+      }
+      .header h1 {
+        margin: 0;
+        font-size: 28px;
+      }
+      .header p {
+        margin: 5px 0 0 0;
+        opacity: 0.9;
+        font-size: 14px;
+      }
+
+      /* Tab Navigation */
+      .tab-navigation {
+        display: flex;
+        background: #ecf0f1;
+        border-bottom: 1px solid #bdc3c7;
+      }
+      .tab-button {
+        flex: 1;
+        padding: 15px 20px;
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-size: 16px;
+        font-weight: 500;
+        color: #7f8c8d;
+        transition: all 0.3s ease;
+        position: relative;
+      }
+      .tab-button.active {
         color: #2c3e50;
-        border-bottom: 3px solid #3498db;
-        padding-bottom: 10px;
+        background: white;
       }
+      .tab-button.active::after {
+        content: "";
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        background: #3498db;
+      }
+      .tab-button:hover:not(.active) {
+        background: #d5dbdb;
+      }
+
+      /* Tab Content */
+      .tab-content {
+        padding: 20px;
+        min-height: 600px;
+      }
+      .tab-pane {
+        display: none;
+      }
+      .tab-pane.active {
+        display: block;
+      }
+
+      /* Form Styles */
       .form-section {
-        margin-bottom: 20px;
-        padding: 15px;
-        border: 1px solid #ddd;
-        border-radius: 5px;
+        margin-bottom: 25px;
+        padding: 20px;
+        border: 1px solid #e8e8e8;
+        border-radius: 8px;
+        background: #fafafa;
       }
       .form-section h3 {
         margin-top: 0;
-        color: #34495e;
+        color: #2c3e50;
+        font-size: 18px;
+        border-bottom: 2px solid #3498db;
+        padding-bottom: 8px;
       }
       label {
         display: block;
-        margin: 10px 0 5px;
-        font-weight: bold;
+        margin: 12px 0 6px;
+        font-weight: 600;
+        color: #34495e;
       }
       input,
       select,
       textarea {
         width: 100%;
-        padding: 8px;
+        padding: 10px;
         border: 1px solid #ddd;
-        border-radius: 4px;
+        border-radius: 6px;
         box-sizing: border-box;
+        font-size: 14px;
+        transition: border-color 0.3s ease;
+      }
+      input:focus,
+      select:focus,
+      textarea:focus {
+        outline: none;
+        border-color: #3498db;
+        box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
       }
       button {
         background: #3498db;
         color: white;
-        padding: 12px 20px;
+        padding: 12px 24px;
         border: none;
-        border-radius: 4px;
+        border-radius: 6px;
         cursor: pointer;
         font-size: 16px;
+        font-weight: 500;
+        transition: all 0.3s ease;
       }
       button:hover {
         background: #2980b9;
+        transform: translateY(-1px);
       }
-      .feed {
-        background: #f8f9fa;
-        border: 1px solid #dee2e6;
-        border-radius: 5px;
-        max-height: 400px;
-        overflow-y: auto;
-        padding: 10px;
+      .btn-primary {
+        background: #3498db;
       }
-      .feed li {
-        margin: 5px 0;
-        padding: 8px;
-        border-left: 4px solid #3498db;
-        background: white;
-        border-radius: 3px;
-      }
-      .feed li.error {
-        border-left-color: #e74c3c;
-        background: #fdf2f2;
-      }
-      .feed li.success {
-        border-left-color: #27ae60;
-        background: #f2f8f2;
-      }
-      .add-button {
+      .btn-success {
         background: #27ae60;
-        margin: 5px 0;
-        padding: 5px 10px;
-        font-size: 12px;
       }
-      .remove-button {
+      .btn-danger {
         background: #e74c3c;
-        margin-left: 10px;
-        padding: 2px 8px;
-        font-size: 12px;
       }
-      .package-item,
-      .address-item {
-        border: 1px solid #eee;
-        padding: 10px;
-        margin: 5px 0;
-        border-radius: 3px;
-        background: #fafafa;
+      .btn-secondary {
+        background: #95a5a6;
       }
-      .order-search {
-        margin: 20px 0;
-        padding: 15px;
+
+      /* Order History Styles */
+      .search-section {
         background: #f8f9fa;
-        border-radius: 5px;
-        border: 1px solid #dee2e6;
-      }
-      .order-details {
-        background: white;
-        border: 1px solid #ddd;
-        border-radius: 5px;
-        margin: 10px 0;
-        padding: 15px;
-      }
-      .order-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        border-bottom: 1px solid #eee;
-        padding-bottom: 10px;
-        margin-bottom: 15px;
-      }
-      .status-badge {
-        padding: 4px 12px;
-        border-radius: 20px;
-        font-size: 12px;
-        font-weight: bold;
-        text-transform: uppercase;
-      }
-      .status-submitted {
-        background: #e3f2fd;
-        color: #1976d2;
-      }
-      .status-cms_verified {
-        background: #f3e5f5;
-        color: #7b1fa2;
-      }
-      .status-wms_registered {
-        background: #fff3e0;
-        color: #f57c00;
-      }
-      .status-ros_optimized {
-        background: #e8f5e8;
-        color: #388e3c;
-      }
-      .status-ready_for_delivery {
-        background: #e1f5fe;
-        color: #0277bd;
-      }
-      .status-out_for_delivery {
-        background: #fff8e1;
-        color: #f9a825;
-      }
-      .status-delivered {
-        background: #e8f5e8;
-        color: #2e7d32;
-      }
-      .status-failed {
-        background: #ffebee;
-        color: #c62828;
-      }
-      .order-info {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 15px;
-        margin: 10px 0;
-      }
-      .info-group {
-        background: #f8f9fa;
-        padding: 10px;
-        border-radius: 3px;
-      }
-      .info-label {
-        font-weight: bold;
-        color: #495057;
-        font-size: 12px;
-        text-transform: uppercase;
-        margin-bottom: 5px;
-      }
-      .info-value {
-        color: #212529;
-      }
-      .packages-list {
-        background: #f8f9fa;
-        padding: 10px;
-        border-radius: 3px;
-        margin: 10px 0;
-      }
-      .package-detail {
-        background: white;
-        padding: 8px;
-        margin: 5px 0;
-        border-radius: 3px;
-        border-left: 3px solid #3498db;
+        padding: 20px;
+        border-radius: 8px;
+        margin-bottom: 20px;
       }
       .search-controls {
         display: flex;
-        gap: 10px;
+        gap: 15px;
         align-items: center;
         flex-wrap: wrap;
       }
       .search-input {
         flex: 1;
-        min-width: 200px;
+        min-width: 250px;
       }
-      .orders-list {
-        max-height: 600px;
+      .order-grid {
+        display: grid;
+        gap: 20px;
+        grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+      }
+      .order-card {
+        background: white;
+        border: 1px solid #e8e8e8;
+        border-radius: 10px;
+        padding: 20px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+      }
+      .order-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 15px rgba(0, 0, 0, 0.15);
+      }
+      .order-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+        padding-bottom: 10px;
+        border-bottom: 2px solid #ecf0f1;
+      }
+      .order-id {
+        font-size: 18px;
+        font-weight: bold;
+        color: #2c3e50;
+      }
+
+      /* Status Badges */
+      .status-badge {
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: bold;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+      .status-processing {
+        background: #fff3cd;
+        color: #856404;
+      }
+      .status-cms_verified {
+        background: #d1ecf1;
+        color: #0c5460;
+      }
+      .status-wms_registered {
+        background: #d4edda;
+        color: #155724;
+      }
+      .status-ros_optimized {
+        background: #cce5ff;
+        color: #004085;
+      }
+      .status-ready_for_delivery {
+        background: #e2e3e5;
+        color: #383d41;
+      }
+      .status-out_for_delivery {
+        background: #fff3cd;
+        color: #856404;
+      }
+      .status-delivered {
+        background: #d4edda;
+        color: #155724;
+      }
+      .status-failed {
+        background: #f8d7da;
+        color: #721c24;
+      }
+
+      /* Order Details */
+      .order-info-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 15px;
+        margin: 15px 0;
+      }
+      .info-item {
+        background: #f8f9fa;
+        padding: 12px;
+        border-radius: 6px;
+        border-left: 4px solid #3498db;
+      }
+      .info-label {
+        font-size: 12px;
+        font-weight: 600;
+        color: #7f8c8d;
+        text-transform: uppercase;
+        margin-bottom: 4px;
+      }
+      .info-value {
+        color: #2c3e50;
+        font-weight: 500;
+      }
+
+      /* Packages & Delivery */
+      .packages-section,
+      .delivery-section,
+      .proof-section {
+        margin: 15px 0;
+        padding: 15px;
+        background: #f8f9fa;
+        border-radius: 6px;
+      }
+      .section-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: #2c3e50;
+        margin-bottom: 10px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .package-item {
+        background: white;
+        padding: 10px;
+        margin: 8px 0;
+        border-radius: 4px;
+        border-left: 3px solid #27ae60;
+      }
+
+      /* Proof of Delivery */
+      .proof-images {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      .proof-image {
+        width: 80px;
+        height: 80px;
+        border-radius: 6px;
+        object-fit: cover;
+        cursor: pointer;
+        border: 2px solid #e8e8e8;
+        transition: border-color 0.3s ease;
+      }
+      .proof-image:hover {
+        border-color: #3498db;
+      }
+
+      /* Modal for image viewing */
+      .modal {
+        display: none;
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.8);
+      }
+      .modal-content {
+        margin: 5% auto;
+        display: block;
+        max-width: 80%;
+        max-height: 80%;
+      }
+      .close {
+        position: absolute;
+        top: 15px;
+        right: 35px;
+        color: #f1f1f1;
+        font-size: 40px;
+        font-weight: bold;
+        cursor: pointer;
+      }
+
+      /* Real-time Feed */
+      .feed-section {
+        background: #2c3e50;
+        color: white;
+        padding: 20px;
+        border-radius: 8px;
+        margin-top: 20px;
+      }
+      .feed-title {
+        color: white;
+        margin-bottom: 15px;
+        font-size: 18px;
+      }
+      .feed {
+        background: #34495e;
+        border: 1px solid #2c3e50;
+        border-radius: 6px;
+        max-height: 300px;
         overflow-y: auto;
+        padding: 15px;
+      }
+      .feed li {
+        margin: 8px 0;
+        padding: 10px;
+        border-left: 4px solid #3498db;
+        background: #2c3e50;
+        border-radius: 4px;
+        list-style: none;
+        font-size: 13px;
+        line-height: 1.4;
+      }
+      .feed li.error {
+        border-left-color: #e74c3c;
+        background: #4a2c2a;
+      }
+      .feed li.success {
+        border-left-color: #27ae60;
+        background: #2d4a2b;
+      }
+
+      /* Utility Classes */
+      .add-button {
+        background: #27ae60;
+        margin: 8px 0;
+        padding: 8px 16px;
+        font-size: 14px;
+      }
+      .remove-button {
+        background: #e74c3c;
+        margin-left: 10px;
+        padding: 4px 12px;
+        font-size: 12px;
+      }
+      .package-item,
+      .address-item {
+        border: 1px solid #e8e8e8;
+        padding: 15px;
+        margin: 10px 0;
+        border-radius: 6px;
+        background: white;
       }
       .loading {
         text-align: center;
-        color: #6c757d;
+        color: #7f8c8d;
         font-style: italic;
-        padding: 20px;
+        padding: 40px;
+        font-size: 16px;
       }
       .no-orders {
         text-align: center;
-        color: #6c757d;
-        padding: 40px;
+        color: #7f8c8d;
+        padding: 60px;
         background: #f8f9fa;
-        border-radius: 5px;
+        border-radius: 8px;
         margin: 20px 0;
+      }
+      .no-orders::before {
+        content: "📋";
+        display: block;
+        font-size: 48px;
+        margin-bottom: 16px;
+      }
+
+      /* Responsive Design */
+      @media (max-width: 768px) {
+        .container {
+          margin: 10px;
+        }
+        .tab-navigation {
+          flex-direction: column;
+        }
+        .search-controls {
+          flex-direction: column;
+          align-items: stretch;
+        }
+        .order-info-grid {
+          grid-template-columns: 1fr;
+        }
+        .order-grid {
+          grid-template-columns: 1fr;
+        }
       }
     </style>
   </head>
   <body>
     <div class="container">
-      <h2>SwiftTrack — Swift Logistics E-Commerce Portal</h2>
-
-      <form id="orderForm">
-        <div class="form-section">
-          <h3>Order Information</h3>
-          <label
-            >Order ID:
-            <input id="orderId" required placeholder="e.g., ORD-2025-001"
-          /></label>
-          <label
-            >Client ID:
-            <input
-              id="clientId"
-              value="client-123"
-              required
-              placeholder="e.g., CLIENT-001"
-          /></label>
-          <label
-            >Priority:
-            <select id="priority">
-              <option value="STANDARD">Standard</option>
-              <option value="URGENT">Urgent</option>
-            </select>
-          </label>
-        </div>
-
-        <div class="form-section">
-          <h3>Packages</h3>
-          <div id="packages">
-            <div class="package-item">
-              <label
-                >SKU:
-                <input name="packageSku" required placeholder="e.g., BOOK-001"
-              /></label>
-              <label
-                >Description:
-                <input name="packageDesc" placeholder="e.g., Programming Book"
-              /></label>
-              <label
-                >Quantity:
-                <input name="packageQty" type="number" value="1" min="1"
-              /></label>
-              <label
-                >Priority:
-                <select name="packagePriority">
-                  <option value="STANDARD">Standard</option>
-                  <option value="URGENT">Urgent</option>
-                </select>
-              </label>
-            </div>
-          </div>
-          <button type="button" class="add-button" onclick="addPackage()">
-            + Add Package
-          </button>
-        </div>
-
-        <div class="form-section">
-          <h3>Delivery Addresses</h3>
-          <div id="addresses">
-            <div class="address-item">
-              <textarea
-                name="deliveryAddress"
-                required
-                placeholder="e.g., No 123, Main Street, Colombo 07"
-              ></textarea>
-            </div>
-          </div>
-          <button type="button" class="add-button" onclick="addAddress()">
-            + Add Address
-          </button>
-        </div>
-
-        <button type="submit">Submit Order to Swift Logistics</button>
-      </form>
-
-      <!-- Order Search and History Section -->
-      <div class="form-section">
-        <h3>📋 Order History & Tracking</h3>
-        <div class="order-search">
-          <div class="search-controls">
-            <input
-              type="text"
-              id="searchOrderId"
-              placeholder="Search by Order ID (e.g., ORD-POSTMAN-001)"
-              class="search-input"
-            />
-            <button type="button" onclick="searchOrder()">
-              🔍 Search Order
-            </button>
-            <button type="button" onclick="loadAllOrders()">
-              📄 Load All Orders
-            </button>
-            <button type="button" onclick="clearOrderHistory()">
-              🗑️ Clear
-            </button>
-          </div>
-        </div>
-
-        <div id="orderHistorySection">
-          <div id="orderResults" class="orders-list"></div>
-        </div>
+      <!-- Header -->
+      <div class="header">
+        <h1>🚀 SwiftTrack</h1>
+        <p>Enterprise Logistics Management & Order Processing Platform</p>
       </div>
 
-      <h3>📡 Live Order Tracking</h3>
-      <ul id="feed" class="feed"></ul>
+      <!-- Tab Navigation -->
+      <div class="tab-navigation">
+        <button class="tab-button active" onclick="switchTab('new-order')">
+          📦 New Order
+        </button>
+        <button class="tab-button" onclick="switchTab('order-history')">
+          📋 Order History
+        </button>
+        <button class="tab-button" onclick="switchTab('live-tracking')">
+          📡 Live Tracking
+        </button>
+      </div>
+
+      <!-- Tab Content -->
+      <div class="tab-content">
+        <!-- New Order Tab -->
+        <div id="new-order" class="tab-pane active">
+          <form id="orderForm">
+            <div class="form-section">
+              <h3>📋 Order Information</h3>
+              <div
+                style="
+                  display: grid;
+                  grid-template-columns: 1fr 1fr 1fr;
+                  gap: 15px;
+                "
+              >
+                <label>
+                  Order ID:
+                  <input
+                    id="orderId"
+                    required
+                    placeholder="e.g., ORD-2025-001"
+                  />
+                </label>
+                <label>
+                  Client ID:
+                  <input
+                    id="clientId"
+                    value="client-123"
+                    required
+                    placeholder="e.g., CLIENT-001"
+                  />
+                </label>
+                <label>
+                  Priority:
+                  <select id="priority">
+                    <option value="STANDARD">Standard</option>
+                    <option value="URGENT">Urgent</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+
+            <div class="form-section">
+              <h3>📦 Packages</h3>
+              <div id="packages">
+                <div class="package-item">
+                  <div
+                    style="
+                      display: grid;
+                      grid-template-columns: 1fr 2fr 100px 1fr;
+                      gap: 15px;
+                    "
+                  >
+                    <label>
+                      SKU:
+                      <input
+                        name="packageSku"
+                        required
+                        placeholder="e.g., BOOK-001"
+                      />
+                    </label>
+                    <label>
+                      Description:
+                      <input
+                        name="packageDesc"
+                        placeholder="e.g., Programming Book"
+                      />
+                    </label>
+                    <label>
+                      Quantity:
+                      <input
+                        name="packageQty"
+                        type="number"
+                        value="1"
+                        min="1"
+                      />
+                    </label>
+                    <label>
+                      Priority:
+                      <select name="packagePriority">
+                        <option value="STANDARD">Standard</option>
+                        <option value="URGENT">Urgent</option>
+                      </select>
+                    </label>
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                class="add-button btn-success"
+                onclick="addPackage()"
+              >
+                ➕ Add Package
+              </button>
+            </div>
+
+            <div class="form-section">
+              <h3>🏠 Delivery Addresses</h3>
+              <div id="addresses">
+                <div class="address-item">
+                  <textarea
+                    name="deliveryAddress"
+                    required
+                    placeholder="e.g., No 123, Main Street, Colombo 07"
+                    rows="2"
+                  ></textarea>
+                </div>
+              </div>
+              <button
+                type="button"
+                class="add-button btn-success"
+                onclick="addAddress()"
+              >
+                ➕ Add Address
+              </button>
+            </div>
+
+            <button
+              type="submit"
+              class="btn-primary"
+              style="width: 100%; padding: 15px; font-size: 18px"
+            >
+              🚀 Submit Order to SwiftTrack
+            </button>
+          </form>
+        </div>
+
+        <!-- Order History Tab -->
+        <div id="order-history" class="tab-pane">
+          <div class="search-section">
+            <h3>� Search & Filter Orders</h3>
+            <div class="search-controls">
+              <input
+                type="text"
+                id="searchOrderId"
+                placeholder="Search by Order ID (e.g., ORD-001)"
+                class="search-input"
+              />
+              <button type="button" class="btn-primary" onclick="searchOrder()">
+                🔍 Search
+              </button>
+              <button
+                type="button"
+                class="btn-secondary"
+                onclick="loadAllOrders()"
+              >
+                📄 Load All
+              </button>
+              <button
+                type="button"
+                class="btn-secondary"
+                onclick="clearOrderHistory()"
+              >
+                🗑️ Clear
+              </button>
+            </div>
+          </div>
+
+          <div id="orderHistorySection">
+            <div id="orderResults" class="order-grid"></div>
+          </div>
+        </div>
+
+        <!-- Live Tracking Tab -->
+        <div id="live-tracking" class="tab-pane">
+          <div class="feed-section">
+            <h3 class="feed-title">📡 Real-Time Order Updates</h3>
+            <p style="color: #bdc3c7; margin-bottom: 20px">
+              Live updates from all order processing activities across the
+              SwiftTrack system
+            </p>
+            <ul id="feed" class="feed"></ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Image Modal -->
+    <div id="imageModal" class="modal">
+      <span class="close" onclick="closeModal()">&times;</span>
+      <img class="modal-content" id="modalImage" />
     </div>
 
     <script>
+      // Tab Management
+      function switchTab(tabId) {
+        // Hide all tab panes
+        document.querySelectorAll(".tab-pane").forEach((pane) => {
+          pane.classList.remove("active");
+        });
+
+        // Remove active class from all tab buttons
+        document.querySelectorAll(".tab-button").forEach((button) => {
+          button.classList.remove("active");
+        });
+
+        // Show selected tab pane
+        document.getElementById(tabId).classList.add("active");
+
+        // Add active class to clicked button
+        event.target.classList.add("active");
+
+        // Load data for specific tabs
+        if (tabId === "order-history") {
+          // Auto-load recent orders when opening history tab
+          if (document.getElementById("orderResults").innerHTML === "") {
+            loadAllOrders();
+          }
+        }
+      }
+
+      // Modal Management
+      function openModal(imageSrc) {
+        document.getElementById("imageModal").style.display = "block";
+        document.getElementById("modalImage").src = imageSrc;
+      }
+
+      function closeModal() {
+        document.getElementById("imageModal").style.display = "none";
+      }
+
       // Real-time updates via WebSocket
       const socket = io("http://localhost:3002");
       socket.on("orderUpdate", (evt) => {
@@ -346,7 +689,9 @@
           : "success";
         li.className = eventClass;
 
-        let message = `[${evt.timestamp}] ${evt.eventType} — Order ${evt.orderId}`;
+        let message = `[${new Date(evt.timestamp).toLocaleTimeString()}] ${
+          evt.eventType
+        } — Order ${evt.orderId}`;
 
         // Add additional details based on event type
         if (evt.data && evt.data.assignedDriver) {
@@ -364,6 +709,12 @@
 
         li.textContent = message;
         document.getElementById("feed").prepend(li);
+
+        // Keep only last 50 items
+        const feedItems = document.querySelectorAll("#feed li");
+        if (feedItems.length > 50) {
+          feedItems[feedItems.length - 1].remove();
+        }
       });
 
       // Add package function
@@ -372,16 +723,18 @@
         const packageItem = document.createElement("div");
         packageItem.className = "package-item";
         packageItem.innerHTML = `
-          <label>SKU: <input name="packageSku" required placeholder="e.g., ELECTRONICS-001" /></label>
-          <label>Description: <input name="packageDesc" placeholder="e.g., Smartphone" /></label>
-          <label>Quantity: <input name="packageQty" type="number" value="1" min="1" /></label>
-          <label>Priority: 
-            <select name="packagePriority">
-              <option value="STANDARD">Standard</option>
-              <option value="URGENT">Urgent</option>
-            </select>
-          </label>
-          <button type="button" class="remove-button" onclick="this.parentElement.remove()">Remove</button>
+          <div style="display: grid; grid-template-columns: 1fr 2fr 100px 1fr; gap: 15px;">
+            <label>SKU: <input name="packageSku" required placeholder="e.g., ELECTRONICS-001" /></label>
+            <label>Description: <input name="packageDesc" placeholder="e.g., Smartphone" /></label>
+            <label>Quantity: <input name="packageQty" type="number" value="1" min="1" /></label>
+            <label>Priority: 
+              <select name="packagePriority">
+                <option value="STANDARD">Standard</option>
+                <option value="URGENT">Urgent</option>
+              </select>
+            </label>
+          </div>
+          <button type="button" class="remove-button btn-danger" onclick="this.parentElement.remove()">❌ Remove</button>
         `;
         packagesDiv.appendChild(packageItem);
       }
@@ -392,8 +745,8 @@
         const addressItem = document.createElement("div");
         addressItem.className = "address-item";
         addressItem.innerHTML = `
-          <textarea name="deliveryAddress" required placeholder="e.g., No 456, Galle Road, Colombo 03"></textarea>
-          <button type="button" class="remove-button" onclick="this.parentElement.remove()">Remove</button>
+          <textarea name="deliveryAddress" required placeholder="e.g., No 456, Galle Road, Colombo 03" rows="2"></textarea>
+          <button type="button" class="remove-button btn-danger" onclick="this.parentElement.remove()">❌ Remove</button>
         `;
         addressesDiv.appendChild(addressItem);
       }
@@ -448,22 +801,33 @@
 
             if (response.ok) {
               alert(
-                `Order submitted successfully! Order ID: ${result.orderId}`
+                `✅ Order submitted successfully!\n\nOrder ID: ${result.orderId}\nStatus: ${result.status}\nProcessing Mode: ${result.processing.mode}\nEstimated Completion: ${result.processing.estimatedCompletion}`
               );
+
               document.getElementById("orderForm").reset();
 
-              // Auto-search for the newly created order
+              // Switch to live tracking tab
+              switchTab("live-tracking");
+              document
+                .querySelector("[onclick=\"switchTab('live-tracking')\"]")
+                .click();
+
+              // Auto-search for the newly created order after a delay
               setTimeout(() => {
                 document.getElementById("searchOrderId").value = result.orderId;
+                switchTab("order-history");
+                document
+                  .querySelector("[onclick=\"switchTab('order-history')\"]")
+                  .click();
                 searchOrder();
-              }, 1000);
+              }, 2000);
             } else {
               alert(
-                `Order submission failed: ${result.error || result.message}`
+                `❌ Order submission failed:\n${result.error || result.message}`
               );
             }
           } catch (error) {
-            alert(`Error submitting order: ${error.message}`);
+            alert(`❌ Error submitting order:\n${error.message}`);
           }
         });
 
@@ -510,6 +874,10 @@
 
       function displayOrders(orders) {
         const resultsDiv = document.getElementById("orderResults");
+        if (orders.length === 0) {
+          showNoOrdersMessage("No orders found");
+          return;
+        }
         resultsDiv.innerHTML = orders
           .map((order) => createOrderCard(order))
           .join("");
@@ -524,104 +892,202 @@
         ).toLocaleString();
 
         return `
-          <div class="order-details">
+          <div class="order-card">
             <div class="order-header">
-              <h4>Order ${order.id}</h4>
+              <div class="order-id">Order ${order.id || order.order_id}</div>
               <span class="status-badge ${statusClass}">${order.status.replace(
           /_/g,
           " "
         )}</span>
             </div>
             
-            <div class="order-info">
-              <div class="info-group">
+            <div class="order-info-grid">
+              <div class="info-item">
                 <div class="info-label">Client</div>
                 <div class="info-value">${
-                  order.clientName || order.clientId
+                  order.clientName || order.client_id || order.clientId
                 }</div>
               </div>
-              <div class="info-group">
+              <div class="info-item">
                 <div class="info-label">Priority</div>
                 <div class="info-value">${order.priority}</div>
               </div>
-              <div class="info-group">
+              <div class="info-item">
                 <div class="info-label">Created</div>
                 <div class="info-value">${createdDate}</div>
               </div>
-              <div class="info-group">
+              <div class="info-item">
                 <div class="info-label">Driver</div>
                 <div class="info-value">${
-                  order.assignedDriver || "Not assigned"
+                  order.assignedDriver ||
+                  order.assigned_driver_id ||
+                  "Not assigned"
                 }</div>
               </div>
             </div>
 
+            ${createPackagesSection(order.packages)}
+            ${createDeliverySection(order.deliveryAddresses)}
+            ${createProofOfDeliverySection(order)}
+            ${createOrderDetailsSection(order)}
+          </div>
+        `;
+      }
+
+      function createPackagesSection(packages) {
+        if (!packages || packages.length === 0) return "";
+
+        return `
+          <div class="packages-section">
+            <div class="section-title">
+              📦 Packages (${packages.length})
+            </div>
+            ${packages
+              .map(
+                (pkg) => `
+              <div class="package-item">
+                <strong>${pkg.sku}</strong> - ${
+                  pkg.description || "No description"
+                }
+                <br><small>Qty: ${pkg.quantity} | Priority: ${
+                  pkg.priority
+                } | Weight: ${pkg.weight_kg || "N/A"}kg</small>
+              </div>
+            `
+              )
+              .join("")}
+          </div>
+        `;
+      }
+
+      function createDeliverySection(addresses) {
+        if (!addresses || addresses.length === 0) return "";
+
+        const addressList = Array.isArray(addresses) ? addresses : [addresses];
+
+        return `
+          <div class="delivery-section">
+            <div class="section-title">
+              🏠 Delivery Addresses (${addressList.length})
+            </div>
+            <div class="info-value">
+              ${addressList
+                .map(
+                  (addr) =>
+                    `<div style="margin: 5px 0; padding: 8px; background: white; border-radius: 4px;">${
+                      addr.address || addr
+                    }</div>`
+                )
+                .join("")}
+            </div>
+          </div>
+        `;
+      }
+
+      function createProofOfDeliverySection(order) {
+        // Check for proof of delivery data
+        const hasProof =
+          order.status === "DELIVERED" || order.status === "delivered";
+        const proofImages = [];
+
+        // Mock proof of delivery images - in real system this would come from the database
+        if (hasProof) {
+          proofImages.push({
+            type: "signature",
+            url: `http://localhost:4001/uploads/proof-of-delivery/signature-${
+              order.id || order.order_id
+            }-${Date.now()}.png`,
+            alt: "Customer Signature",
+          });
+          proofImages.push({
+            type: "photo",
+            url: `http://localhost:4001/uploads/proof-of-delivery/photo-${
+              order.id || order.order_id
+            }-${Date.now()}.png`,
+            alt: "Delivery Photo",
+          });
+        }
+
+        if (!hasProof && proofImages.length === 0) return "";
+
+        return `
+          <div class="proof-section">
+            <div class="section-title">
+              📸 Proof of Delivery
+            </div>
             ${
-              order.packages && order.packages.length > 0
+              hasProof
                 ? `
-              <div class="packages-list">
-                <div class="info-label">Packages (${
-                  order.packages.length
-                })</div>
-                ${order.packages
+              <div class="proof-images">
+                ${proofImages
                   .map(
-                    (pkg) => `
-                  <div class="package-detail">
-                    <strong>${pkg.sku}</strong> - ${
-                      pkg.description || "No description"
-                    }
-                    <br><small>Qty: ${pkg.quantity} | Priority: ${
-                      pkg.priority
-                    } | Weight: ${pkg.weight_kg || "N/A"}kg</small>
-                  </div>
+                    (img) => `
+                  <img 
+                    src="${img.url}" 
+                    alt="${img.alt}" 
+                    class="proof-image"
+                    onclick="openModal('${img.url}')"
+                    onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iODAiIGhlaWdodD0iODAiIHZpZXdCb3g9IjAgMCA4MCA4MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjgwIiBoZWlnaHQ9IjgwIiBmaWxsPSIjRjhGOUZBIi8+CjxwYXRoIGQ9Ik0yNCAzMkgyNFYzMkg1NlYzMkg1NlY0OEg1NlY0OEgyNFY0OFYzMloiIGZpbGw9IiM2Qzc1N0QiLz4KPHBhdGggZD0iTTMyIDM2TDM2IDQwTDQ4IDI4IiBzdHJva2U9IiM2Qzc1N0QiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+Cjx0ZXh0IHg9IjQwIiB5PSI2MCIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjEwIiBmaWxsPSIjNkM3NTdEIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj4ke2ltZy50eXBlLnRvVXBwZXJDYXNlKCl9PC90ZXh0Pgo8L3N2Zz4K'"
+                    title="${img.alt}"
+                  />
                 `
                   )
                   .join("")}
               </div>
+              <small style="color: #7f8c8d;">Click images to view full size</small>
             `
-                : ""
-            }
-
-            ${
-              order.deliveryAddresses && order.deliveryAddresses.length > 0
-                ? `
-              <div class="info-group">
-                <div class="info-label">Delivery Addresses</div>
-                <div class="info-value">
-                  ${
-                    Array.isArray(order.deliveryAddresses)
-                      ? order.deliveryAddresses.join("<br>")
-                      : order.deliveryAddresses
-                  }
-                </div>
+                : `
+              <div style="color: #7f8c8d; font-style: italic;">
+                Proof of delivery will be available once the order is delivered
               </div>
             `
-                : ""
             }
+          </div>
+        `;
+      }
 
-            ${
-              order.estimatedDelivery
-                ? `
-              <div class="info-group">
-                <div class="info-label">Estimated Delivery</div>
-                <div class="info-value">${new Date(
-                  order.estimatedDelivery
-                ).toLocaleString()}</div>
+      function createOrderDetailsSection(order) {
+        const details = [];
+
+        if (order.contractId || order.contract_id) {
+          details.push({
+            label: "Contract ID",
+            value: order.contractId || order.contract_id,
+          });
+        }
+        if (order.routeId || order.route_id) {
+          details.push({
+            label: "Route ID",
+            value: order.routeId || order.route_id,
+          });
+        }
+        if (order.estimatedDelivery || order.estimated_delivery_time) {
+          const deliveryTime = new Date(
+            order.estimatedDelivery || order.estimated_delivery_time
+          ).toLocaleString();
+          details.push({ label: "Estimated Delivery", value: deliveryTime });
+        }
+        if (order.estimatedCost || order.estimated_cost) {
+          details.push({
+            label: "Cost",
+            value: `$${order.estimatedCost || order.estimated_cost}`,
+          });
+        }
+
+        if (details.length === 0) return "";
+
+        return `
+          <div class="order-info-grid" style="margin-top: 15px;">
+            ${details
+              .map(
+                (detail) => `
+              <div class="info-item">
+                <div class="info-label">${detail.label}</div>
+                <div class="info-value">${detail.value}</div>
               </div>
             `
-                : ""
-            }
-
-            ${
-              order.routeId
-                ? `
-              <div class="info-group">
-                <div class="info-label">Route ID</div>
-                <div class="info-value">${order.routeId}</div>
-              </div>
-            `
-                : ""
-            }
+              )
+              .join("")}
           </div>
         `;
       }
@@ -634,7 +1100,7 @@
       function showNoOrdersMessage(message) {
         document.getElementById(
           "orderResults"
-        ).innerHTML = `<div class="no-orders">📋 ${message}</div>`;
+        ).innerHTML = `<div class="no-orders">${message}</div>`;
       }
 
       function clearOrderHistory() {
@@ -644,7 +1110,7 @@
 
       // Enhanced real-time tracking with order refresh
       function refreshOrderInHistory(orderId) {
-        const orderCards = document.querySelectorAll(".order-details h4");
+        const orderCards = document.querySelectorAll(".order-card .order-id");
         for (let card of orderCards) {
           if (card.textContent.includes(orderId)) {
             // Refresh this specific order
@@ -662,6 +1128,23 @@
             searchOrder();
           }
         });
+
+      // Close modal when clicking outside
+      window.onclick = function (event) {
+        const modal = document.getElementById("imageModal");
+        if (event.target === modal) {
+          closeModal();
+        }
+      };
+
+      // Auto-generate order ID
+      document.addEventListener("DOMContentLoaded", function () {
+        const orderIdField = document.getElementById("orderId");
+        if (!orderIdField.value) {
+          const timestamp = Date.now();
+          orderIdField.value = `ORD-${timestamp}`;
+        }
+      });
     </script>
   </body>
 </html>

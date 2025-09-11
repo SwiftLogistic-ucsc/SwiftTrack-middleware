@@ -1,5 +1,6 @@
 import express from "express";
 import dotenv from "dotenv";
+import http from "http";
 import {
   startProducer,
   ensureTopic,
@@ -96,6 +97,41 @@ logger.info("SwiftTrack Middleware - Protocol adapters initialized", {
 
 function now() {
   return new Date().toISOString();
+}
+
+// Helper function to make HTTP requests
+function makeHttpRequest(url) {
+  return new Promise((resolve, reject) => {
+    const request = http.get(url, (response) => {
+      let data = "";
+
+      response.on("data", (chunk) => {
+        data += chunk;
+      });
+
+      response.on("end", () => {
+        try {
+          const parsedData = JSON.parse(data);
+          resolve({
+            ok: response.statusCode >= 200 && response.statusCode < 300,
+            status: response.statusCode,
+            data: parsedData,
+          });
+        } catch (error) {
+          reject(new Error(`Failed to parse JSON: ${error.message}`));
+        }
+      });
+    });
+
+    request.on("error", (error) => {
+      reject(error);
+    });
+
+    request.setTimeout(5000, () => {
+      request.destroy();
+      reject(new Error("Request timeout"));
+    });
+  });
 }
 
 // Circuit breaker functions
@@ -863,35 +899,69 @@ app.get("/api/orders/:orderId", async (req, res) => {
       deliveryCount: order.deliveryAddresses.length,
     });
 
+    // Prepare base order response
+    const orderResponse = {
+      id: order.id,
+      clientId: order.client_id,
+      clientName: order.client_name,
+      status: order.status,
+      priority: order.priority,
+      packages: order.packages,
+      deliveryAddresses: order.deliveryAddresses.map((addr) => addr.address),
+
+      // Processing details
+      contractId: order.contract_id,
+      billingStatus: order.billing_status,
+      estimatedCost: order.estimated_cost,
+      warehousePackageId: order.warehouse_package_id,
+      warehouseLocation: order.warehouse_location,
+      routeId: order.route_id,
+      assignedDriver: order.assigned_driver_id,
+      assignedVehicle: order.assigned_vehicle_id,
+      estimatedDelivery: order.estimated_delivery_time,
+
+      // Timestamps
+      submittedAt: order.submitted_at,
+      cmsVerifiedAt: order.cms_verified_at,
+      wmsRegisteredAt: order.wms_registered_at,
+      rosOptimizedAt: order.ros_optimized_at,
+      readyForDeliveryAt: order.ready_for_delivery_at,
+    };
+
+    // If order is delivered, try to get proof of delivery
+    if (order.status === "DELIVERED") {
+      try {
+        logger.info(
+          `Fetching proof of delivery for order ${orderId} from driver service`
+        );
+        const proofResponse = await makeHttpRequest(
+          `http://localhost:4001/api/orders/${orderId}/proof-of-delivery`
+        );
+
+        logger.info(
+          `Proof of delivery response status: ${proofResponse.status}`
+        );
+
+        if (proofResponse.ok && proofResponse.data?.proofOfDelivery) {
+          logger.info(`Proof of delivery data received for order ${orderId}`, {
+            hasProof: proofResponse.data.proofOfDelivery?.hasProof,
+            fileCount: proofResponse.data.proofOfDelivery?.totalFiles,
+          });
+
+          // Add proof of delivery to the response
+          orderResponse.proofOfDelivery = proofResponse.data.proofOfDelivery;
+        }
+      } catch (error) {
+        logger.warn(`Failed to fetch proof of delivery for order ${orderId}`, {
+          error: error.message,
+        });
+      }
+    }
+
+    // Send the final response with or without proof of delivery
     res.json({
       ok: true,
-      order: {
-        id: order.id,
-        clientId: order.client_id,
-        clientName: order.client_name,
-        status: order.status,
-        priority: order.priority,
-        packages: order.packages,
-        deliveryAddresses: order.deliveryAddresses.map((addr) => addr.address),
-
-        // Processing details
-        contractId: order.contract_id,
-        billingStatus: order.billing_status,
-        estimatedCost: order.estimated_cost,
-        warehousePackageId: order.warehouse_package_id,
-        warehouseLocation: order.warehouse_location,
-        routeId: order.route_id,
-        assignedDriver: order.assigned_driver_id,
-        assignedVehicle: order.assigned_vehicle_id,
-        estimatedDelivery: order.estimated_delivery_time,
-
-        // Timestamps
-        submittedAt: order.submitted_at,
-        cmsVerifiedAt: order.cms_verified_at,
-        wmsRegisteredAt: order.wms_registered_at,
-        rosOptimizedAt: order.ros_optimized_at,
-        readyForDeliveryAt: order.ready_for_delivery_at,
-      },
+      order: orderResponse,
     });
   } catch (err) {
     logger.error(`Failed to retrieve order ${req.params.orderId}`, {

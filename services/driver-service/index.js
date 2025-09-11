@@ -94,6 +94,9 @@ const upload = multer({
 app.use(express.json());
 app.use(express.static("public"));
 
+// Serve uploaded proof of delivery files
+app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
+
 // Enable CORS
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
@@ -974,6 +977,71 @@ app.get("/health", async (req, res) => {
     ],
     realTimeConnections: io.sockets.sockets.size,
   });
+});
+
+// Get proof of delivery for an order
+app.get("/api/orders/:orderId/proof-of-delivery", async (req, res) => {
+  try {
+    const { orderId } = req.params;
+
+    logger.info(`Retrieving proof of delivery for order ${orderId}`);
+
+    // Check uploads directory for proof files
+    const uploadDir = path.join(process.cwd(), "uploads", "proof-of-delivery");
+    const proofFiles = [];
+
+    if (fs.existsSync(uploadDir)) {
+      const files = fs.readdirSync(uploadDir);
+
+      // Filter files that belong to this order
+      const orderFiles = files.filter((file) => file.includes(orderId));
+
+      for (const file of orderFiles) {
+        const filePath = path.join(uploadDir, file);
+        const stats = fs.statSync(filePath);
+
+        let type = "unknown";
+        if (file.includes("signature")) {
+          type = "signature";
+        } else if (file.includes("photo")) {
+          type = "photo";
+        }
+
+        proofFiles.push({
+          filename: file,
+          type: type,
+          url: `http://localhost:${PORT}/uploads/proof-of-delivery/${file}`,
+          uploadedAt: stats.mtime,
+          size: stats.size,
+        });
+      }
+    }
+
+    logger.info(`Found ${proofFiles.length} proof files for order ${orderId}`);
+
+    res.json({
+      ok: true,
+      orderId,
+      proofOfDelivery: {
+        hasProof: proofFiles.length > 0,
+        files: proofFiles,
+        totalFiles: proofFiles.length,
+      },
+    });
+  } catch (error) {
+    logger.error(
+      `Failed to retrieve proof of delivery for order ${req.params.orderId}`,
+      {
+        error: error.message,
+        stack: error.stack,
+      }
+    );
+
+    res.status(500).json({
+      error: "Failed to retrieve proof of delivery",
+      details: error.message,
+    });
+  }
 });
 
 // Start server

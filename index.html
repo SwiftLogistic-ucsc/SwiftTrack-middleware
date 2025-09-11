@@ -831,6 +831,142 @@
           }
         });
 
+      // Show detailed order view when card is clicked
+      async function showOrderDetails(orderId) {
+        showLoading();
+        try {
+          const response = await fetch(
+            `http://localhost:4000/api/orders/${orderId}`
+          );
+          const result = await response.json();
+
+          if (response.ok && result.order) {
+            displayOrderDetails(result.order);
+          } else {
+            showNoOrdersMessage(`Order "${orderId}" not found`);
+          }
+        } catch (error) {
+          showNoOrdersMessage(`Error loading order details: ${error.message}`);
+        }
+      }
+
+      // Display detailed order view
+      function displayOrderDetails(order) {
+        const resultsDiv = document.getElementById("orderResults");
+        resultsDiv.innerHTML = `
+          <div style="grid-column: 1 / -1; margin-bottom: 20px;">
+            <button onclick="loadAllOrders()" class="btn-secondary" style="margin-bottom: 15px;">
+              ← Back to Order List
+            </button>
+            ${createDetailedOrderCard(order)}
+          </div>
+        `;
+      }
+
+      // Create detailed order card with all information
+      function createDetailedOrderCard(order) {
+        const statusClass = `status-${order.status
+          .toLowerCase()
+          .replace(/_/g, "_")}`;
+        const createdDate = new Date(
+          order.submittedAt || order.created_at
+        ).toLocaleString();
+
+        return `
+          <div class="order-card" style="max-width: none; cursor: default;">
+            <div class="order-header">
+              <div class="order-id">Order ${order.id || order.order_id}</div>
+              <span class="status-badge ${statusClass}">${order.status.replace(
+          /_/g,
+          " "
+        )}</span>
+            </div>
+            
+            <div class="order-info-grid">
+              <div class="info-item">
+                <div class="info-label">Client</div>
+                <div class="info-value">${
+                  order.clientName || order.client_id || order.clientId
+                }</div>
+              </div>
+              <div class="info-item">
+                <div class="info-label">Priority</div>
+                <div class="info-value">${order.priority}</div>
+              </div>
+              <div class="info-item">
+                <div class="info-label">Created</div>
+                <div class="info-value">${createdDate}</div>
+              </div>
+              <div class="info-item">
+                <div class="info-label">Driver</div>
+                <div class="info-value">${
+                  order.assignedDriver ||
+                  order.assigned_driver_id ||
+                  "Not assigned"
+                }</div>
+              </div>
+            </div>
+
+            ${createPackagesSection(order.packages)}
+            ${createDeliverySection(order.deliveryAddresses)}
+            ${createProofOfDeliverySection(order)}
+            ${createOrderDetailsSection(order)}
+            ${createTimestampsSection(order)}
+          </div>
+        `;
+      }
+
+      // Create timestamps section for detailed view
+      function createTimestampsSection(order) {
+        const timestamps = [];
+
+        if (order.submittedAt)
+          timestamps.push({
+            label: "Submitted",
+            value: new Date(order.submittedAt).toLocaleString(),
+          });
+        if (order.cmsVerifiedAt)
+          timestamps.push({
+            label: "CMS Verified",
+            value: new Date(order.cmsVerifiedAt).toLocaleString(),
+          });
+        if (order.wmsRegisteredAt)
+          timestamps.push({
+            label: "WMS Registered",
+            value: new Date(order.wmsRegisteredAt).toLocaleString(),
+          });
+        if (order.rosOptimizedAt)
+          timestamps.push({
+            label: "Route Optimized",
+            value: new Date(order.rosOptimizedAt).toLocaleString(),
+          });
+        if (order.readyForDeliveryAt)
+          timestamps.push({
+            label: "Ready for Delivery",
+            value: new Date(order.readyForDeliveryAt).toLocaleString(),
+          });
+
+        if (timestamps.length === 0) return "";
+
+        return `
+          <div class="packages-section">
+            <div class="section-title">⏰ Processing Timeline</div>
+            <div class="order-info-grid">
+              ${timestamps
+                .map(
+                  (ts) => `
+                <div class="info-item">
+                  <div class="info-label">${ts.label}</div>
+                  <div class="info-value">${ts.value}</div>
+                </div>
+              `
+                )
+                .join("")}
+            </div>
+          </div>
+        `;
+      }
+
       // Order search and history functions
       async function searchOrder() {
         const orderId = document.getElementById("searchOrderId").value.trim();
@@ -892,7 +1028,9 @@
         ).toLocaleString();
 
         return `
-          <div class="order-card">
+          <div class="order-card" onclick="showOrderDetails('${
+            order.id || order.order_id
+          }')" style="cursor: pointer;">
             <div class="order-header">
               <div class="order-id">Order ${order.id || order.order_id}</div>
               <span class="status-badge ${statusClass}">${order.status.replace(
@@ -926,10 +1064,9 @@
               </div>
             </div>
 
-            ${createPackagesSection(order.packages)}
-            ${createDeliverySection(order.deliveryAddresses)}
-            ${createProofOfDeliverySection(order)}
-            ${createOrderDetailsSection(order)}
+            <div style="text-align: center; margin-top: 15px; padding: 10px; background: #f8f9fa; border-radius: 6px; font-size: 14px; color: #666;">
+              <strong>Click to view full order details</strong>
+            </div>
           </div>
         `;
       }
@@ -985,65 +1122,54 @@
       }
 
       function createProofOfDeliverySection(order) {
-        // Check for proof of delivery data
-        const hasProof =
-          order.status === "DELIVERED" || order.status === "delivered";
-        const proofImages = [];
+        // Check if order has proof of delivery data
+        if (order.proofOfDelivery && order.proofOfDelivery.hasProof) {
+          const proofFiles = order.proofOfDelivery.files || [];
 
-        // Mock proof of delivery images - in real system this would come from the database
-        if (hasProof) {
-          proofImages.push({
-            type: "signature",
-            url: `http://localhost:4001/uploads/proof-of-delivery/signature-${
-              order.id || order.order_id
-            }-${Date.now()}.png`,
-            alt: "Customer Signature",
-          });
-          proofImages.push({
-            type: "photo",
-            url: `http://localhost:4001/uploads/proof-of-delivery/photo-${
-              order.id || order.order_id
-            }-${Date.now()}.png`,
-            alt: "Delivery Photo",
-          });
-        }
-
-        if (!hasProof && proofImages.length === 0) return "";
-
-        return `
-          <div class="proof-section">
-            <div class="section-title">
-              📸 Proof of Delivery
-            </div>
-            ${
-              hasProof
-                ? `
+          return `
+            <div class="proof-section">
+              <div class="section-title">
+                📸 Proof of Delivery (${proofFiles.length} files)
+              </div>
               <div class="proof-images">
-                ${proofImages
+                ${proofFiles
                   .map(
-                    (img) => `
+                    (file) => `
                   <img 
-                    src="${img.url}" 
-                    alt="${img.alt}" 
+                    src="${file.url}" 
+                    alt="${file.type} - ${file.filename}" 
                     class="proof-image"
-                    onclick="openModal('${img.url}')"
-                    onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iODAiIGhlaWdodD0iODAiIHZpZXdCb3g9IjAgMCA4MCA4MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjgwIiBoZWlnaHQ9IjgwIiBmaWxsPSIjRjhGOUZBIi8+CjxwYXRoIGQ9Ik0yNCAzMkgyNFYzMkg1NlYzMkg1NlY0OEg1NlY0OEgyNFY0OFYzMloiIGZpbGw9IiM2Qzc1N0QiLz4KPHBhdGggZD0iTTMyIDM2TDM2IDQwTDQ4IDI4IiBzdHJva2U9IiM2Qzc1N0QiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+Cjx0ZXh0IHg9IjQwIiB5PSI2MCIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjEwIiBmaWxsPSIjNkM3NTdEIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj4ke2ltZy50eXBlLnRvVXBwZXJDYXNlKCl9PC90ZXh0Pgo8L3N2Zz4K'"
-                    title="${img.alt}"
+                    onclick="openModal('${file.url}')"
+                    title="${file.type.toUpperCase()} - Uploaded: ${new Date(
+                      file.uploadedAt
+                    ).toLocaleString()}"
                   />
                 `
                   )
                   .join("")}
               </div>
               <small style="color: #7f8c8d;">Click images to view full size</small>
-            `
-                : `
-              <div style="color: #7f8c8d; font-style: italic;">
-                Proof of delivery will be available once the order is delivered
+            </div>
+          `;
+        }
+
+        // For delivered orders without proof data, try to load from server
+        if (order.status === "DELIVERED" || order.status === "delivered") {
+          return `
+            <div class="proof-section">
+              <div class="section-title">
+                📸 Proof of Delivery
               </div>
-            `
-            }
-          </div>
-        `;
+              <div id="proof-loading-${
+                order.id || order.order_id
+              }" style="text-align: center; padding: 20px; color: #7f8c8d;">
+                🔄 Loading proof of delivery...
+              </div>
+            </div>
+          `;
+        }
+
+        return "";
       }
 
       function createOrderDetailsSection(order) {

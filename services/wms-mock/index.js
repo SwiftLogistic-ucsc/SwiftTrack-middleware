@@ -1,5 +1,5 @@
 import express from "express";
-import { getLogger } from "@swifttrack/logger";
+import { getLogger } from "./logger.js";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";

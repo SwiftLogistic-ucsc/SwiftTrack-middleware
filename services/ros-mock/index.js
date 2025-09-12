@@ -1,5 +1,5 @@
 import express from "express";
-import { getLogger } from "@swifttrack/logger";
+import { getLogger } from "./logger.js";
 
 const logger = getLogger("ros-mock");
 const app = express();

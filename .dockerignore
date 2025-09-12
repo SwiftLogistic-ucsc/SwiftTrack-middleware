@@ -1,8 +1,10 @@
 # Dependencies
-node_modules/
+**/node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+package-lock.json
+yarn.lock
 
 # Runtime data
 pids
@@ -125,3 +127,8 @@ rollup.config.js
 # Temporary files
 tmp/
 temp/
+
+# Specific excludes for this project
+services/*/uploads/
+services/*/logs/
+services/*/coverage/
